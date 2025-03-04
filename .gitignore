@@ -1,0 +1,31 @@
+# Build directories (generated output)
+Debug/
+Release/
+
+# Intermediate build files
+*.o
+*.d
+*.lst
+*.map
+*.su
+*.cyclo
+*.axf
+*.elf
+
+# STM32CubeIDE/Eclipse metadata and configuration files
+.project
+.cproject
+.settings/
+
+# CubeMX auto-generated files (if not needed)
+*.ioc.user
+*.ioc_
+
+# Temporary files and backups
+*.log
+*.tmp
+*~
+
+# System-specific files
+.DS_Store
+Thumbs.db
