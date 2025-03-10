@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "protocol.h"
+#include "servo.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -54,8 +55,8 @@ char uart_rx_buffer[UART_BUFFER_SIZE];  // Buffer for incoming UART data
 uint8_t rx_index = 0;                  // Current position in the buffer
 volatile uint8_t commandComplete = 0;  // Flag set when a full command is received
 volatile uint8_t current_angle = 90;   // Current servo angle (default 90°)
-/* DMA buffer for UART reception */
-uint8_t dmaBuffer[DMA_BUFFER_SIZE];
+uint8_t dmaBuffer[DMA_BUFFER_SIZE]; // DMA buffer for UART reception //
+
 
 /* USER CODE END PV */
 
@@ -68,7 +69,7 @@ static void MX_DMA_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Global protocol context */
-ProtocolContext protocol_ctx;
+//ProtocolContext protocol_ctx;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -127,7 +128,6 @@ void HAL_UART_IdleCallback(UART_HandleTypeDef *huart)
 // In main.c, inside main():
 int main(void)
 {
-    /* MCU Configuration */
     HAL_Init();
     SystemClock_Config();
     MX_GPIO_Init();
@@ -135,37 +135,32 @@ int main(void)
     MX_USART2_UART_Init();
     MX_TIM2_Init();
 
-    /* Enable the Idle Interrupt manually for USART2 */
+    // Use our servo module initialization.
+    Servo_Init();
+
     huart2.Instance->CR1 |= USART_CR1_IDLEIE;
 
-    /* Start PWM output on TIM2 Channel 1 */
-    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
-
-    /* Initialize protocol state */
     Protocol_Init(&protocol_ctx);
-
-    /* Start DMA-based UART reception */
     HAL_UART_Receive_DMA(&huart2, dmaBuffer, DMA_BUFFER_SIZE);
+    HAL_UART_Transmit(&huart2, (uint8_t*)"UART PASS:\r\n", 14, UART_TX_TIMEOUT);
 
-    // Optional: send a startup message so you know UART is working.
-    HAL_UART_Transmit(&huart2, (uint8_t*)"UART PASS:\r\n", 14, 100);
-
-    /* Main loop */
     while (1)
     {
-        // Check if a servo command has been queued.
         if (protocol_ctx.commandPending)
         {
-            // Clear the pending flag before executing.
             protocol_ctx.commandPending = 0;
-            // Execute the servo ramp command.
-            Protocol_RunCommand(&protocol_ctx,
-                                protocol_ctx.pendingTargetAngle,
-                                protocol_ctx.pendingStep);
+            protocol_ctx.state = STATE_RUNNING;
+            Servo_Ramp(&protocol_ctx.current_servo_angle,
+                       protocol_ctx.pendingTargetAngle,
+                       protocol_ctx.pendingStep);
+            protocol_ctx.state = STATE_MENU;
+            HAL_UART_Transmit(&huart2, (uint8_t*)CMD_EXECUTED_MSG, strlen(CMD_EXECUTED_MSG), UART_TX_TIMEOUT);
+            Protocol_DisplayMenu();
         }
         HAL_Delay(100);
     }
 }
+
 
 
 /**
