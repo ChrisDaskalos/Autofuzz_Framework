@@ -77,25 +77,6 @@ ServoProject/
 
 ---
 
-## How Unit Testing Helps Fix Embedded Code
-
-- **Isolating Code Logic:**  
-  Unit tests target individual functions or modules (e.g., command parsing, state transitions) independent of the hardware, allowing you to validate logic changes quickly.
-
-- **Rapid Feedback & Regression Prevention:**  
-  Automated tests provide immediate feedback, ensuring that any modifications don’t break existing behavior.
-
-- **Documenting Expected Behavior:**  
-  Unit tests serve as executable documentation. They show how functions are expected to behave under various conditions, including error scenarios.
-
-- **Hardware Abstraction via Stubs:**  
-  Stubs simulate the behavior of hardware-specific functions (such as UART and PWM calls), allowing you to test the logic without real hardware. While stubs do not simulate the entire behavior of the actual hardware, they let you verify that your software calls the HAL functions correctly.
-
-- **Extended Testing with LibFuzzer (Planned):**  
-  Future integration of LibFuzzer will allow exhaustive randomized testing to uncover edge cases and potential vulnerabilities in input parsing.
-
----
-
 - **GDB Debugging:**  
   Run your test executables under GDB to obtain backtraces when a segfault or error occurs:
   ```bash
