@@ -29,31 +29,31 @@ The project is developed in STM32CubeIDE on Ubuntu and is structured to support 
 ## Project Structure
 
 ServoProject/
-├── Core/
-│   ├── Inc/
-│   │   ├── main.h
-│   │   ├── protocol.h
-│   │   ├── protocol_defs.h
-│   │   ├── servo.h
-│   │   └── servo_defs.h
-│   └── Src/
-│       ├── main.c
-│       ├── protocol.c
-│       ├── servo.c
-│       └── (other source files)
-├── Drivers/
-│   └── (HAL driver files)
-└── Tests/
-    └── unit_tests/
-        ├── test_common.h      (host stubs and shared definitions)
-        ├── test_common.c      (global definitions for stubs)
-        ├── test_protocol_checksum.c
-        ├── test_protocol_authentication.c
-        ├── test_protocol_init.c
-        ├── test_protocol_menu.c
-        ├── test_protocol_servo_command.c
-        ├── test_protocol_state_machine.c
-        └── Makefile           (builds .elfs for host-based testing)
+**  Core/
+    Inc/**
+      main.h
+      protocol.h
+      protocol_defs.h
+      servo.h
+      servo_defs.h
+    **Src/**
+      main.c
+      protocol.c
+      servo.c
+      (other source files)
+** Drivers/**
+   (HAL driver files)
+**    Tests/
+      unit_tests/**
+           test_common.h      (host stubs and shared definitions)
+           test_common.c      (global definitions for stubs)
+           test_protocol_checksum.c
+           test_protocol_authentication.c
+           test_protocol_init.c
+           test_protocol_menu.c
+           test_protocol_servo_command.c
+           test_protocol_state_machine.c
+           Makefile           (builds .elfs for host-based testing)
 
 ---
 
