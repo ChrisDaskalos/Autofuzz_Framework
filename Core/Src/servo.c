@@ -1,18 +1,13 @@
-#include "servo.h"
-#include "main.h"
-#include <stdio.h>
-#include <string.h>
-#include "protocol_defs.h"  // Add this to bring in UART_TX_TIMEOUT
+#ifdef UNIT_TEST
+	#include "test_common.h"
+#else
+	#include "servo.h"
+	#include "main.h"
+	#include "protocol_defs.h"  // Add this to bring in UART_TX_TIMEOUT
+	#include <stdio.h>
+	#include <string.h>
+#endif
 
-
-void Servo_Init(void)
-{
-    // Start PWM output for the servo (assumes htim2 is configured and initialized)
-    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
-
-    // Set the servo to its default angle.
-    Servo_SetAngle(SERVO_DEFAULT_ANGLE);
-}
 
 void Servo_SetAngle(uint8_t angle)
 {
@@ -31,6 +26,17 @@ void Servo_SetAngle(uint8_t angle)
     sprintf(setMsg, "SERVO ANGLE SET TO: %d (PULSE: %d)\r\n", angle, pulse);
     HAL_UART_Transmit(&huart2, (uint8_t*)setMsg, strlen(setMsg), UART_TX_TIMEOUT);
 }
+
+void Servo_Init(void)
+{
+    // Start PWM output for the servo (assumes htim2 is configured and initialized)
+    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+
+    // Set the servo to its default angle.
+    Servo_SetAngle(SERVO_DEFAULT_ANGLE);
+}
+
+
 
 void Servo_Ramp(uint8_t *currentAngle, uint8_t targetAngle, uint8_t step)
 {
