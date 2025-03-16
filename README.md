@@ -28,8 +28,6 @@ The project is developed in STM32CubeIDE on Ubuntu and is structured to support 
 
 ## Project Structure
 
-## Project Structure
-
 ```text
 ServoProject/
 ├── Core/
@@ -57,7 +55,7 @@ ServoProject/
         ├── test_protocol_servo_command.c
         ├── test_protocol_state_machine.c
         └── Makefile           (Builds ELF executables for host-based testing)
-
+```
 
 ---
 
