@@ -1,42 +1,17 @@
-#include "protocol.h"
-#include "servo.h"
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include "protocol_defs.h"
-#include "servo_defs.h"
+#ifdef UNIT_TEST
+	#include "test_common.h"
+#else
+	#include "protocol.h"
+	#include "servo.h"
+	#include <stdio.h>
+	#include <string.h>
+	#include <stdlib.h>
+	#include "protocol_defs.h"
+	#include "servo_defs.h"
+#endif
 
 // Global definition of protocol context.
 ProtocolContext protocol_ctx;
-
-uint8_t ComputeChecksumFromNumbers(int angle, int step)
-{
-    return (uint8_t)(angle + step);
-}
-
-void Protocol_DisplayMenu(void)
-{
-    HAL_UART_Transmit(&huart2, (uint8_t*)MENU_PROMPT, strlen(MENU_PROMPT), UART_TX_TIMEOUT);
-}
-
-void Protocol_DisplayHelp(void)
-{
-    HAL_UART_Transmit(&huart2, (uint8_t*)HELP_MESSAGE, strlen(HELP_MESSAGE), UART_TX_TIMEOUT);
-}
-
-void Protocol_Init(ProtocolContext *ctx)
-{
-    ctx->authenticated = 0;
-    ctx->current_servo_angle = SERVO_DEFAULT_ANGLE;
-    ctx->state = STATE_MENU;
-    ctx->cancelRequested = 0;
-    ctx->pendingTargetAngle = 0;
-    ctx->pendingStep = 0;
-    ctx->commandPending = 0;
-    strcpy(ctx->diagnostic_info, "AWAITING PASSWORD.");
-
-    HAL_UART_Transmit(&huart2, (uint8_t*)WELCOME_MSG, strlen(WELCOME_MSG), UART_TX_TIMEOUT);
-}
 
 void Protocol_ProcessCommand(ProtocolContext *ctx, char *command)
 {
@@ -172,3 +147,34 @@ void Protocol_ProcessCommand(ProtocolContext *ctx, char *command)
 
     Protocol_DisplayMenu();
 }
+
+uint8_t ComputeChecksumFromNumbers(int angle, int step)
+{
+    return (uint8_t)(angle + step);
+}
+
+void Protocol_DisplayMenu(void)
+{
+    HAL_UART_Transmit(&huart2, (uint8_t*)MENU_PROMPT, strlen(MENU_PROMPT), UART_TX_TIMEOUT);
+}
+
+void Protocol_DisplayHelp(void)
+{
+    HAL_UART_Transmit(&huart2, (uint8_t*)HELP_MESSAGE, strlen(HELP_MESSAGE), UART_TX_TIMEOUT);
+}
+
+void Protocol_Init(ProtocolContext *ctx)
+{
+    ctx->authenticated = 0;
+    ctx->current_servo_angle = SERVO_DEFAULT_ANGLE;
+    ctx->state = STATE_MENU;
+    ctx->cancelRequested = 0;
+    ctx->pendingTargetAngle = 0;
+    ctx->pendingStep = 0;
+    ctx->commandPending = 0;
+    strcpy(ctx->diagnostic_info, "AWAITING PASSWORD.");
+
+    HAL_UART_Transmit(&huart2, (uint8_t*)WELCOME_MSG, strlen(WELCOME_MSG), UART_TX_TIMEOUT);
+}
+
+
