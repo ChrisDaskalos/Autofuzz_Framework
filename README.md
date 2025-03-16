@@ -69,7 +69,7 @@ ServoProject/
 
 - **3. Run CMocka Tests (on Docker Containers) for These Functions**  
   - **Objective:** Create Docker containers that build and run CMocka-based tests for the isolated functions.  
-  - **Status:** Pending – Setup and integration of Docker with the unit test Makefile is next.
+  - **Status:** Pending – Setup and integration of Docker with the unit test Makefile is next. (Makefile & unittests completed looking on how to integrate w/Docker).
 
 - **4. Extend the CMocka Code to Embed LibFuzzer Functionality (with Exhaustive-Random Testing and Finish Conditions)**  
   - **Objective:** Integrate LibFuzzer into the CMocka test harness to automatically generate random inputs and run until a finish condition (e.g., time limit) is met.  
