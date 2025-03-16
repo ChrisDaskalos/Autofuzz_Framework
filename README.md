@@ -96,17 +96,10 @@ ServoProject/
 
 ---
 
-## Detailed Logging & Debugging
-
-- **Verbose CMocka Output:**  
-  Set the environment variable `CMOCKA_MESSAGE_OUTPUT=XML` or call `cmocka_set_message_output(CM_OUTPUT_XML);` in your test `main()` function for detailed XML logs.
-
-- **Debug Prints:**  
-  Insert `printf()` or `print_message()` statements in both your unit test code and embedded functions to trace execution and monitor variable values.
-
 - **GDB Debugging:**  
   Run your test executables under GDB to obtain backtraces when a segfault or error occurs:
   ```bash
-  gdb ./test_protocol_servo_command.elf
-  (gdb) run
-  (gdb) backtrace
+  gdb ./test_protocol_servo_command.elf  ..   (gdb) run
+  (gdb) backtrace 
+  || ./test_protocol_xxx.elf (for Cmocka)
+
