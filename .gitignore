@@ -1,6 +1,8 @@
 # Build directories (generated output)
 Debug/
 Release/
+build/
+cmake-build-debug/
 
 # Intermediate build files
 *.o
@@ -21,10 +23,13 @@ Release/
 *.ioc.user
 *.ioc_
 
-# Temporary files and backups
+# Temporary files, backups, and editor-specific files
 *.log
 *.tmp
 *~
+*.swp
+*.bak
+*.orig
 
 # System-specific files
 .DS_Store
