@@ -17,12 +17,16 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#include "main.h"
-#include "protocol.h"
-#include "servo.h"
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+#ifdef UNIT_TEST
+	#include "test_common.h"
+#else
+	#include "main.h"
+	#include "protocol.h"
+	#include "servo.h"
+	#include <stdio.h>
+	#include <string.h>
+	#include <stdlib.h>
+#endif
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 

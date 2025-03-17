@@ -68,11 +68,11 @@ ServoProject/
 - **2. Build a Makefile Rule to Compile as .elf for x86_64 – DONE**  
   A host Makefile has been created in the `Tests/unit_tests/` folder to compile the embedded code (`protocol.c`, `servo.c`) into ELF executables for unit testing on x86_64.
 
-- **3. Run CMocka Tests (on Docker Containers) for These Functions**  
+- **3. Run CMocka Tests (on Docker Containers) for These Functions - DONE**  
   - **Objective:** Create Docker containers that build and run CMocka-based tests for the isolated functions.  
   - **Status:** Pending – Setup and integration of Docker with the unit test Makefile is next. (Makefile & unittests completed looking on how to integrate w/Docker).
 
-- **4. Extend the CMocka Code to Embed LibFuzzer Functionality (with Exhaustive-Random Testing and Finish Conditions)**  
+- **4. Extend the CMocka Code to Embed LibFuzzer Functionality (with Exhaustive-Random Testing and Finish Conditions) - IN PROGRESS**  
   - **Objective:** Integrate LibFuzzer into the CMocka test harness to automatically generate random inputs and run until a finish condition (e.g., time limit) is met.  
   - **Status:** Pending – Research and implementation of LibFuzzer integration is next.
 
@@ -81,7 +81,25 @@ ServoProject/
 - **GDB Debugging:**  
   Run your test executables under GDB to obtain backtraces when a segfault or error occurs:
   ```bash
-  gdb ./test_protocol_servo_command.elf  ..   (gdb) run
-  (gdb) backtrace 
-  || ./test_protocol_xxx.elf (for Cmocka)
+  gdb ./test_protocol_servo_command.elf  ..   
+   into :(gdb) run
+   into: (gdb) backtrace
+  ```
+  ```
+   OR ./test_protocol_xxx.elf (for Cmocka)
+  ```
+
+## Building and Running Tests via Docker
+
+A **Dockerfile** is provided in the project root. It sets up an Ubuntu-based image, installs GCC, Make, libcmocka-dev, and GDB, then builds tests in `Tests/unit_tests/` and runs them automatically.
+
+To build the Docker image (from the root of the project, where the Dockerfile is located):
+
+```bash
+docker build -t servo_project_tests .
+
+docker run --rm servo_project_tests
+```
+The container will compile the code (via make) and then call run_tests.sh to run CMocka tests.
+
 

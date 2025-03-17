@@ -1,6 +1,7 @@
 #ifdef UNIT_TEST
 	#include "test_common.h"
 #else
+	#include "main.h"
 	#include "protocol.h"
 	#include "servo.h"
 	#include <stdio.h>
@@ -16,8 +17,10 @@ ProtocolContext protocol_ctx;
 void Protocol_ProcessCommand(ProtocolContext *ctx, char *command)
 {
     // Strip trailing newline characters.
-    for (char *p = command; *p; p++) {
-        if (*p == '\r' || *p == '\n') {
+    for (char *p = command; *p; p++)
+    {
+        if (*p == '\r' || *p == '\n')
+        {
             *p = '\0';
             break;
         }
@@ -27,13 +30,16 @@ void Protocol_ProcessCommand(ProtocolContext *ctx, char *command)
 
     if (!ctx->authenticated)
     {
-        if (strcmp(command, PROTOCOL_PASSWORD) == 0) {
+        if (strcmp(command, PROTOCOL_PASSWORD) == 0)
+        {
             HAL_UART_Transmit(&huart2, (uint8_t*)PASSWORD_ACCEPTED_MSG, strlen(PASSWORD_ACCEPTED_MSG), UART_TX_TIMEOUT);
             ctx->authenticated = 1;
             ctx->state = STATE_MENU;
             strcpy(ctx->diagnostic_info, "AUTHENTICATED.");
             Protocol_DisplayMenu();
-        } else {
+        }
+        else
+        {
             HAL_UART_Transmit(&huart2, (uint8_t*)INVALID_PASSWORD_MSG, strlen(INVALID_PASSWORD_MSG), UART_TX_TIMEOUT);
             strcpy(ctx->diagnostic_info, "AUTHENTICATION FAILED.");
         }
