@@ -12,6 +12,6 @@
 #define SERVO_PULSE_RANGE       (SERVO_MAX_PULSE - SERVO_MIN_PULSE)
 
 // Delay between ramp steps (milliseconds)
-#define SERVO_RAMP_DELAY_MS     25
+#define SERVO_RAMP_DELAY_MS     100
 
 #endif // SERVO_DEFS_H

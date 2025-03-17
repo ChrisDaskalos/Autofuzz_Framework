@@ -1,9 +1,6 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
-#ifndef UNIT_TEST
-  #include "main.h"  // only include for real embedded builds
-#endif
 
 
 //#include "main.h"
