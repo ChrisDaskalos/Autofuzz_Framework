@@ -67,11 +67,11 @@ ServoProject/
 - **2. Build a Makefile Rule to Compile as .elf for x86_64 – DONE**  
   A host Makefile has been created in the `Tests/unit_tests/` folder to compile the embedded code (`protocol.c`, `servo.c`) into ELF executables for unit testing on x86_64.
 
-- **3. Run CMocka Tests (on Docker Containers) for These Functions**  
+- **3. Run CMocka Tests (on Docker Containers) for These Functions - DONE**  
   - **Objective:** Create Docker containers that build and run CMocka-based tests for the isolated functions.  
   - **Status:** Pending – Setup and integration of Docker with the unit test Makefile is next.
 
-- **4. Extend the CMocka Code to Embed LibFuzzer Functionality (with Exhaustive-Random Testing and Finish Conditions)**  
+- **4. Extend the CMocka Code to Embed LibFuzzer Functionality (with Exhaustive-Random Testing and Finish Conditions) - IN PROGRESS**  
   - **Objective:** Integrate LibFuzzer into the CMocka test harness to automatically generate random inputs and run until a finish condition (e.g., time limit) is met.  
   - **Status:** Pending – Research and implementation of LibFuzzer integration is next.
 
@@ -82,7 +82,9 @@ ServoProject/
   ```bash
   gdb ./test_protocol_servo_command.elf  ..   
    into :(gdb) run
-   into: (gdb) backtrace 
+   into: (gdb) backtrace
+  ```
+  ```
    OR ./test_protocol_xxx.elf (for Cmocka)
   ```
 
