@@ -1,4 +1,4 @@
-# ServoProject – UART Protocol for MG90S Servo on STM32 Nucleo
+# Thesis Embedded Systems: Use case: UART Protocol for MG90S Servo-control driver on STM32 Nucleo.
 
 This project implements a UART-based protocol for controlling an MG90S servo motor using an STM32 Nucleo F103RB board. The embedded firmware uses DMA-based UART reception with idle-line detection, a state machine for processing user commands (including authentication and menu selections), and PWM generation via TIM2 to control the servo.
 
