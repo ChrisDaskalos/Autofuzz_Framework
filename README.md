@@ -99,7 +99,23 @@ ServoProject/
 - **GDB Debugging:**  
   Run your test executables under GDB to obtain backtraces when a segfault or error occurs:
   ```bash
-  gdb ./test_protocol_servo_command.elf  ..   (gdb) run
-  (gdb) backtrace 
-  || ./test_protocol_xxx.elf (for Cmocka)
+  gdb ./test_protocol_servo_command.elf  ..   
+   into :(gdb) run
+   into: (gdb) backtrace 
+   OR ./test_protocol_xxx.elf (for Cmocka)
+  ```
+
+## Building and Running Tests via Docker
+
+A **Dockerfile** is provided in the project root. It sets up an Ubuntu-based image, installs GCC, Make, libcmocka-dev, and GDB, then builds tests in `Tests/unit_tests/` and runs them automatically.
+
+To build the Docker image (from the root of the project, where the Dockerfile is located):
+
+```bash
+docker build -t servo_project_tests .
+
+docker run --rm servo_project_tests
+```
+The container will compile the code (via make) and then call run_tests.sh to run CMocka tests.
+
 
