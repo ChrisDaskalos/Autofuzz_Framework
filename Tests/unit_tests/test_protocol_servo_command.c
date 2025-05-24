@@ -1,3 +1,19 @@
+/**
+ * @file test_protocol_servo_commands.c
+ * @brief Unit tests for servo command parsing and queuing in the protocol.
+ *
+ * @details
+ * This file defines a suite of CMocka unit tests to verify the handling
+ * of servo movement commands issued to the protocol. It covers:
+ *   - Valid command formats and checksum verification.
+ *   - Error handling for invalid checksum, format, non-numeric input,
+ *     extra/missing fields, zero or negative step values.
+ *   - Parentheses-wrapped commands, clamping to maximum servo angle,
+ *     and trimming of whitespace.
+ * Tests assert that `commandPending`, `pendingTargetAngle`, `pendingStep`,
+ * and `state` are updated as expected.
+ */
+
 #include "test_common.h"
 
 /* 

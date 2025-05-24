@@ -1,17 +1,17 @@
 #ifndef SERVO_DEFS_H
 #define SERVO_DEFS_H
 
-// Servo angle limits
-#define SERVO_MIN_ANGLE         0
-#define SERVO_MAX_ANGLE         165
-#define SERVO_DEFAULT_ANGLE     0
+/* Absolute electrical limits of the servo*/
+#define SERVO_MIN_PULSE     500     /* µs */
+#define SERVO_MAX_PULSE     2500    /* µs */
+#define SERVO_PULSE_RANGE   (SERVO_MAX_PULSE - SERVO_MIN_PULSE)
 
-// PWM pulse values corresponding to servo positions
-#define SERVO_MIN_PULSE         500
-#define SERVO_MAX_PULSE         2500
-#define SERVO_PULSE_RANGE       (SERVO_MAX_PULSE - SERVO_MIN_PULSE)
+/* Logical angle range you exposing to user */
+#define SERVO_MAX_ANGLE     165     /* deg */
+#define SERVO_DEFAULT_ANGLE 90
 
-// Delay between ramp steps (milliseconds)
-#define SERVO_RAMP_DELAY_MS     100
+/* ─── NEW: largest step we will ever apply in one update ── */
+#define SERVO_MAX_STEP      45      /* deg per update */
+#define SERVO_RAMP_DELAY_MS 1000
 
-#endif // SERVO_DEFS_H
+#endif /* SERVO_DEFS_H */

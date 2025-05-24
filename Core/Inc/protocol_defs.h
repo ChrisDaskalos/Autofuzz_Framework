@@ -7,8 +7,9 @@
 // Buffer sizes and timeouts
 #define PROTOCOL_DIAG_SIZE      100
 #define UART_TX_TIMEOUT         100
+#define DMA_BUFFER_SIZE         1024
 
-// Prompt and status messages
+// Prompt and status messages 
 #define WELCOME_MSG             "\r\nWELCOME. PLEASE ENTER PASSWORD:\r\n"
 #define PASSWORD_ACCEPTED_MSG   "\r\nPASSWORD ACCEPTED!\r\n"
 #define INVALID_PASSWORD_MSG    "\r\nINVALID PASSWORD!\r\n"
