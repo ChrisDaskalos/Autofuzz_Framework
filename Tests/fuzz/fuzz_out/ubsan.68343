@@ -26,3 +26,4 @@ fuzz_custom_mutator.c:17:32: runtime error: unsigned integer overflow: 429496729
     #10 0x41e4cd in _start (/home/fretz/STM32CubeIDE/workspace_1.17.0/ServoProject/Tests/fuzz/fuzz_protocol_cmd+0x41e4cd)
 
 SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior fuzz_custom_mutator.c:17:32 in 
+ 

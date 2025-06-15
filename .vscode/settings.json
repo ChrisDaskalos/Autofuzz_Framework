@@ -4,6 +4,9 @@
         "*.fuzz": "c",
         "test_common.h": "c",
         "protocol.h": "c",
-        "stdint.h": "c"
+        "stdint.h": "c",
+        "cmocka.h": "c",
+        "string.h": "c",
+        "protocol_defs.h": "c"
     }
 }
