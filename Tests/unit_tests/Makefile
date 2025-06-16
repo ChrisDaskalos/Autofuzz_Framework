@@ -6,7 +6,16 @@ CC        := gcc
 CFLAGS    := -Wall -Wextra -g -std=c11 -DUNIT_TEST -I. -I../../Core/Inc
 LDFLAGS   := -lcmocka
 COV_FLAGS := -O0 --coverage
-
+# ------------------------------------------------------------------
+#  Tool-chain flags
+#   • -O0        : keep debug symbols accurate & help sanitizers
+#   • --coverage : GCov/LCOV counters
+#   • -fsanitize : AddressSan + UB-San in a single pass
+# ------------------------------------------------------------------
+SAN_FLAGS := -fsanitize=address,undefined
+CFLAGS    := -Wall -Wextra -g -std=c11 -DUNIT_TEST -I. -I../../Core/Inc \
+             -O0 --coverage $(SAN_FLAGS)
+LDFLAGS   := -lcmocka $(SAN_FLAGS)
 # ---------- run-time limits (override from shell) ---------------------
 FUZZ_MAX_SECS  ?= 30     # seconds per binary (0 = unlimited)
 FUZZ_MAX_CASES ?= 500    # calls   per binary (0 = unlimited)
@@ -23,6 +32,10 @@ TEST_SRC := \
   test_protocol_init.c \
   test_protocol_menu.c \
   test_protocol_servo_command.c \
+  test_protocol_menu_unknown.c \
+  test_protocol_wrong_password.c \
+  test_good_servo_command.c \
+  test_protocol_cancel_running.c \
   test_protocol_state_machine.c
 
 TEST_ELF := $(TEST_SRC:.c=.elf)
@@ -85,6 +98,8 @@ test: all
 	for exe in test_*.elf fuzz_* ; do \
 	  [ -x "$$exe" ] || continue; \
 	  echo ">>> running $$exe"; \
+	  ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 \
+	  UBSAN_OPTIONS=print_stacktrace=1 \
 	  FUZZ_MAX_SECS=$(FUZZ_MAX_SECS) FUZZ_MAX_CASES=$(FUZZ_MAX_CASES) \
 	    ./$$exe || rc=$$?; \
 	done; \

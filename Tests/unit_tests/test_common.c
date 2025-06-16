@@ -16,7 +16,7 @@ void HAL_Delay(uint32_t ms) { (void)ms; }   /* no-op */
 #define IS_CANCEL(c)   ((c)[0]=='B'||(c)[0]=='b') && (c)[1]=='\0'
 
 
-static void reset_ctx(ProtocolContext *c)
+void reset_ctx(ProtocolContext *c)
 {
     c->authenticated      = 0;
     c->current_servo_angle= SERVO_DEFAULT_ANGLE;
@@ -43,13 +43,26 @@ static void handle_menu(ProtocolContext *c,char sel)
     c->state = STATE_MENU;   /* every path ends back at menu              */
 }
 
-int ascii_to_int(const char *s,int *out)
+/* 0 = parse failure, 1 = success */
+int ascii_to_int(const char *s, int *out)
 {
+    /* --- extra guards so fuzzers can’t crash us ---------------------- */
+    if (!s || !out)                       /* NULL pointer passed in?   */
+        return 0;
+    if (*s == '\0')                       /* empty string ⇒ failure    */
+        return 0;
+
     char *end;
-    long v = strtol(s,&end,10);
-    if (*end!='\0') return 0;
-    *out = (int)v;  return 1;
+    long v = strtol(s, &end, 10);
+
+    /* reject if any trailing junk remains */
+    if (*end != '\0')
+        return 0;
+
+    *out = (int)v;
+    return 1;
 }
+
 
 static void handle_servo_cmd(ProtocolContext *c,char *cmd)
 {

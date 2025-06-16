@@ -62,10 +62,16 @@ def _mk_int_edges(bit_width: int, signed: bool) -> List[int]:
 
 
 STRING_SEEDS: Final[List[str]] = [
-    '""', '" "', '"\\t\\n"',
-    '"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"',
-    '"Ω≈ç√∫˜µ≤≥÷"',
+    '""', '" "', '"\\t"', '"\\r\\n"',
+    '"B"', '"b"', '"X"', '"x"',
+    '"(90,2,92)"', '"(0,1,1)"', '"(180,5,185)"',
+    '"(90,2,99)"', '"(180,0,180)"', '"(181,1,182)"',
+    '"(400,1,401)"', '"(255,1,0)"',
+    '"(90 2 92)"', '"(90;2;92)"', '"90,2,92)"', '"(90,2,92"',
+    '"(foo,bar,baz)"', '"¯\\\\_(ツ)_/¯"', '"Ω≈ç√"', '"\\x01\\x7F"',
+    '"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"',  # 40×A
 ]
+
 
 GENERIC_EDGES: Final[Dict[str, List[str | int]]] = {
     # 8-bit
@@ -203,7 +209,9 @@ def _emit_harness(
         if not vals:
             continue
         arr  = f"af_arr_{i}"
-        init = ", ".join(map(str, vals))                 # ← no implicit NULL
+        init = ", ".join(map(str, vals))
+        if pt == "const char *":          # keep loop-until-NULL working
+            init += ", NULL"
         out.append(f"static {pt} {arr}[] = {{ {init} }};")
         if cartesian:
             out.append(f"#define {arr}_LEN (sizeof({arr})/sizeof({arr}[0]))")

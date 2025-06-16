@@ -3,7 +3,7 @@
 #ifndef TEST_COMMON_H
 #define TEST_COMMON_H
 
-/* ─── tool-chain / CMocka -------------------------------------------------- */
+/* ─── tool‑chain / CMocka ─────────────────────────────────────────────── */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -13,18 +13,15 @@
 #include <stdarg.h>
 #include <cmocka.h>
 
-/* ─── production constants we want the tests to use ----------------------- */
+/* ─── production constants we want the tests to use ───────────────────── */
 #include "protocol_defs.h"   /* PROTOCOL_PASSWORD, PROTOCOL_DIAG_SIZE … */
 #include "servo_defs.h"      /* SERVO_MAX_ANGLE, SERVO_DEFAULT_ANGLE … */
-#include "protocol.h"        /* ProtocolState, ProtocolContext, and API prototypes */
+#include "protocol.h"        /* ProtocolState, ProtocolContext, API     */
 
-/* ─── minimal STM32 HAL stand-ins ----------------------------------------- */
+/* ─── minimal STM32 HAL stand‑ins ─────────────────────────────────────── */
 typedef struct { void *Instance; } TIM_HandleTypeDef;
 typedef struct { void *Instance; } UART_HandleTypeDef;
 typedef enum   { HAL_OK = 0, HAL_ERROR } HAL_StatusTypeDef;
-
-int  ascii_to_int(const char *s, int *out);  /* now matches implementation */
-
 
 #define __HAL_TIM_SET_COMPARE(htim,ch,val)   ((void)0)
 
@@ -37,12 +34,15 @@ static inline HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *h,
 
 void HAL_Delay(uint32_t ms);  /* implemented in test_common.c */
 
-/* ─── globals firmware expects ------------------------------------------- */
+/* ─── globals firmware expects ────────────────────────────────────────── */
 extern TIM_HandleTypeDef htim2;
 extern UART_HandleTypeDef huart2;
 
-/* All protocol definitions (state enum, context struct, API) live in protocol.h */
-/* ------------ servo façade for harnesses -------------- */
+/* ─── public helpers exposed to unit‑tests & fuzzers ──────────────────── */
+int  ascii_to_int(const char *s, int *out);
+void reset_ctx(ProtocolContext *ctx);
+
+/* Servo façade so host tests can link */
 void Servo_SetAngle(uint8_t angle);
 void Servo_Ramp(uint8_t *cur, uint8_t tgt, uint8_t step);
 void Servo_Init(void);
