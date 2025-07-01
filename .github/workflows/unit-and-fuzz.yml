@@ -7,7 +7,7 @@ on:
 
 jobs:
   servo-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest          # = 24.04, LLVM/Clang 18
 
     defaults:
       run:
@@ -18,18 +18,22 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install dependencies & Python clang bindings
+      - name: Install Clang-18 toolchain, libs & Python bindings
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
-            clang \
-            llvm \
-            llvm-20-dev \
-            libclang-20-dev \
-            lcov \
-            libcmocka-dev \
+            clang-18            \
+            llvm-18-dev         \
+            libclang-18-dev     \
+            build-essential     \
+            lcov                \
+            libcmocka-dev       \
             python3-pip
+
+          # Tell the Python 'clang' module where libclang lives
+          export LIBCLANG_PATH=$(llvm-config-18 --libdir)
+          echo "LIBCLANG_PATH=$LIBCLANG_PATH" >> $GITHUB_ENV
+
           pip3 install clang
 
       - name: Build everything
