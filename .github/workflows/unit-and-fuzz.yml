@@ -7,7 +7,7 @@ on:
 
 jobs:
   servo-tests:
-    runs-on: ubuntu-latest          # = 24.04, LLVM/Clang 18
+    runs-on: ubuntu-latest     # 24.04 → LLVM/Clang 18
 
     defaults:
       run:
@@ -18,28 +18,23 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install Clang-18 toolchain, libs & Python bindings
+      - name: Install Clang-18 toolchain & Python bindings
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            clang-18            \
-            llvm-18-dev         \
-            libclang-18-dev     \
-            build-essential     \
-            lcov                \
-            libcmocka-dev       \
-            python3-pip
-
-          # Tell the Python 'clang' module where libclang lives
-          export LIBCLANG_PATH=$(llvm-config-18 --libdir)
-          echo "LIBCLANG_PATH=$LIBCLANG_PATH" >> $GITHUB_ENV
-
+            clang-18 llvm-18-dev libclang-18-dev \
+            build-essential lcov libcmocka-dev python3-pip
           pip3 install clang
+
+      - name: Point LIBCLANG_PATH at LLVM 18
+        run: |
+          echo "LIBCLANG_PATH=/usr/lib/llvm-18/lib" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=/usr/lib/llvm-18/lib:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
 
       - name: Build everything
         run: make all
 
-      - name: Run unit & fuzz-tests
+      - name: Run unit & fuzz tests
         run: make test
 
       - name: Generate coverage HTML
