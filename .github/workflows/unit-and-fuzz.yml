@@ -1,6 +1,6 @@
 name: unit-and-fuzz
 
-on:                         # ↳ runs on every push, PR, or manual trigger
+on:
   push:
   pull_request:
   workflow_dispatch:
@@ -12,32 +12,34 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: Tests/unit_tests   # ← points at your Makefile
+        working-directory: Tests/unit_tests
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install toolchain & libs
+      - name: Install toolchain, libs & Python bindings
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             clang llvm-15 llvm-15-dev \
-            build-essential lcov libcmocka-dev
+            build-essential lcov libcmocka-dev \
+            python3-pip
+          pip3 install clang           # installs the Python clang module
 
       - name: Build everything
-        run: make all            # Makefile target present in repo
+        run: make all
 
       - name: Run unit- & fuzz-tests
-        run: make test           # exits non-zero on failure ⇒ job turns red
+        run: make test
 
       - name: Generate coverage HTML
-        if: success()            # only after tests pass
-        run: make coverage       # outputs to ./cov_html/
+        if: success()
+        run: make coverage
 
       - name: Upload coverage report
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-html
-          path: cov_html/        # same dir the Makefile creates
+          path: cov_html/
