@@ -1,0 +1,43 @@
+name: build-and-test
+
+on:                         # ↳ runs on every push, PR, or manual trigger
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  servo-tests:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: Tests/unit_tests   # ← fixed
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install toolchain & libs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+               clang llvm-15 llvm-15-dev \
+               build-essential lcov cmocka-dev
+
+      - name: Build everything
+        run: make all            # Makefile target present in repo
+
+      - name: Run unit- & fuzz-tests
+        run: make test           # exits non-zero on failure ⇒ job turns red
+
+      - name: Generate coverage HTML
+        if: success()            # only after tests pass
+        run: make coverage       # outputs to ./cov_html/
+
+      - name: Upload coverage report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: cov_html/        # same dir the Makefile creates
