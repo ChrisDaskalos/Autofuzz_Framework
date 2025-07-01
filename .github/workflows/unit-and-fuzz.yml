@@ -1,4 +1,4 @@
-name: build-and-test
+name: unit-and-fuzz
 
 on:                         # ↳ runs on every push, PR, or manual trigger
   push:
@@ -12,7 +12,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: Tests/unit_tests   # ← fixed
+        working-directory: Tests/unit_tests   # ← points at your Makefile
 
     steps:
       - name: Checkout repo
@@ -22,8 +22,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-               clang llvm-15 llvm-15-dev \
-               build-essential lcov cmocka-dev
+            clang llvm-15 llvm-15-dev \
+            build-essential lcov libcmocka-dev
 
       - name: Build everything
         run: make all            # Makefile target present in repo
