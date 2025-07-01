@@ -7,7 +7,8 @@ on:
 
 jobs:
   servo-tests:
-    runs-on: ubuntu-latest
+    # Switch to Ubuntu 20.04 (focal) so clang-10 packages exist
+    runs-on: ubuntu-20.04
 
     defaults:
       run:
@@ -24,7 +25,7 @@ jobs:
           sudo apt-get install -y \
             clang-10 llvm-10 libclang-10-dev \
             build-essential lcov libcmocka-dev python3-pip
-          # Point the `clang` command to clang-10
+          # Make clang/llvm-config point at version-10
           sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-10 100
           sudo update-alternatives --install /usr/bin/llvm-config llvm-config /usr/bin/llvm-config-10 100
           pip3 install clang
