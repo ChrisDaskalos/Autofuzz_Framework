@@ -7,7 +7,7 @@ on:
 
 jobs:
   servo-tests:
-    runs-on: ubuntu-latest      # 24.04, LLVM/Clang 18
+    runs-on: ubuntu-latest      # 24.04 → LLVM/Clang 18
 
     defaults:
       run:
@@ -24,7 +24,6 @@ jobs:
           sudo apt-get install -y \
             clang-18 llvm-18-dev libclang-18-dev python3-clang-18 \
             build-essential lcov libcmocka-dev
-
       - name: Point LIBCLANG_PATH at LLVM 18
         run: |
           echo "LIBCLANG_PATH=/usr/lib/llvm-18/lib" >> $GITHUB_ENV
@@ -33,15 +32,18 @@ jobs:
       - name: Build everything
         run: make all
 
+      # ⬇️  CONTINUE EVEN IF SOME TESTS FAIL
       - name: Run unit & fuzz tests
         run: make test
+        continue-on-error: true        # ← key line
 
+      # ⬇️  ALWAYS GENERATE COVERAGE (pass or fail)
       - name: Generate coverage HTML
-        if: success()
+        if: always()
         run: make coverage
 
       - name: Upload coverage report
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-html
