@@ -18,19 +18,18 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install toolchain, libs & Python bindings
+      - name: Install toolchain, libs & Python clang bindings
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            clang llvm-15 llvm-15-dev \
-            build-essential lcov libcmocka-dev \
-            python3-pip
-          pip3 install clang           # installs the Python clang module
+            clang llvm lcov libclang-dev \
+            build-essential libcmocka-dev python3-pip
+          pip3 install clang
 
       - name: Build everything
         run: make all
 
-      - name: Run unit- & fuzz-tests
+      - name: Run unit & fuzz-tests
         run: make test
 
       - name: Generate coverage HTML
