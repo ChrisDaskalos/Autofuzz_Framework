@@ -7,8 +7,7 @@ on:
 
 jobs:
   servo-tests:
-    # Switch to Ubuntu 20.04 (focal) so clang-10 packages exist
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest      # keep using the default, non-deprecated image
 
     defaults:
       run:
@@ -19,15 +18,23 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install Clang-10 toolchain, libs & Python bindings
+      - name: Add LLVM repo & install Clang-10 toolchain
         run: |
+          # Import the LLVM GPG key and add the LLVM 10 repo for this Ubuntu
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo apt-key add -
+          sudo apt-add-repository "deb http://apt.llvm.org/$(. /etc/os-release && echo $UBUNTU_CODENAME)/ llvm-toolchain-$(. /etc/os-release && echo $UBUNTU_CODENAME)-10 main"
           sudo apt-get update
+          # Now clang-10, llvm-10, libclang-10-dev become available
           sudo apt-get install -y \
             clang-10 llvm-10 libclang-10-dev \
             build-essential lcov libcmocka-dev python3-pip
-          # Make clang/llvm-config point at version-10
+
+          # Point /usr/bin/clang & llvm-config at the v10 versions
           sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-10 100
           sudo update-alternatives --install /usr/bin/llvm-config llvm-config /usr/bin/llvm-config-10 100
+
+          # Install the Python bindings so your autofuzz_scan.py can load libclang
           pip3 install clang
 
       - name: Build everything
