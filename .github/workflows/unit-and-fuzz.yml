@@ -16,7 +16,7 @@ jobs:
 
     env:
       FUZZ_CC: clang-18
-      FUZZ_MAX_SECS: "60"                 # full campaign runs ≥1 minute
+      FUZZ_MAX_SECS: "60"                  # ≥ 1 minute
       LIBCLANG_PATH: /usr/lib/llvm-18/lib
       PYTHONPATH: ${{ github.workspace }}/Tests/unit_tests
 
@@ -37,19 +37,12 @@ jobs:
         run: |
           echo "LD_LIBRARY_PATH=/usr/lib/llvm-18/lib:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
           echo "LLVM_SYMBOLIZER_PATH=/usr/lib/llvm-18/bin/llvm-symbolizer" >> "$GITHUB_ENV"
-          clang-18 --version
-          python3 - <<'PY'
-          import clang.cindex, os
-          p = os.environ.get("LIBCLANG_PATH")
-          clang.cindex.Config.set_library_path(p)
-          print("libclang loaded from:", clang.cindex.Config.library_path or p)
-          PY
 
       - name: Clean
         run: make clean
 
-      - name: Build only (deterministic) – gen + unit/edge/fuzz
-        run: make build
+      - name: Build (gen + unit/edge/fuzz)
+        run: make all
 
       - name: Full fuzz campaign (60s)
         run: make fuzz
