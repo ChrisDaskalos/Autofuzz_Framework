@@ -15,11 +15,14 @@ jobs:
         working-directory: Tests/unit_tests
 
     env:
-      CC: clang-18
+      # Let Makefile default CC=?=cc (GCC) for unit/edge; only force clang for fuzzers.
       FUZZ_CC: clang-18
       FUZZ_SMOKE_SECS: "5"
       FUZZ_MAX_SECS: "30"
+      # Make python-clang find libclang
       LIBCLANG_PATH: /usr/lib/llvm-18/lib
+      # Ensure `python3 -m autofuzz.main` can import `autofuzz`
+      PYTHONPATH: ${{ github.workspace }}/Tests/unit_tests
 
     steps:
       - name: Checkout repo
@@ -29,11 +32,25 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            clang-18 llvm-18-dev libclang-18-dev python3-clang-18 \
-            build-essential libcmocka-dev
+            build-essential \
+            clang-18 llvm-18-dev libclang-18-dev libclang-rt-18-dev \
+            python3-clang-18 \
+            libcmocka-dev
 
-      - name: Add LLVM to LD_LIBRARY_PATH
-        run: echo "LD_LIBRARY_PATH=/usr/lib/llvm-18/lib:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
+      - name: Export LLVM runtime path (for libclang/asan)
+        run: |
+          echo "LD_LIBRARY_PATH=/usr/lib/llvm-18/lib:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          echo "LLVM_SYMBOLIZER_PATH=/usr/lib/llvm-18/bin/llvm-symbolizer" >> "$GITHUB_ENV"
+          clang-18 --version
+          python3 - <<'PY'
+          import clang.cindex, os
+          p = os.environ.get("LIBCLANG_PATH")
+          clang.cindex.Config.set_library_path(p)
+          print("libclang loaded from:", clang.cindex.Config.library_path or p)
+          PY
+
+      - name: Clean
+        run: make clean
 
       - name: Build (gen + unit/edge/fuzz)
         run: make all
