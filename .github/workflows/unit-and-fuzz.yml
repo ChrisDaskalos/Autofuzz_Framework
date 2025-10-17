@@ -20,7 +20,6 @@ jobs:
       FUZZ_SMOKE_SECS: "5"
       FUZZ_MAX_SECS: "30"
       LIBCLANG_PATH: /usr/lib/llvm-18/lib
-      LD_LIBRARY_PATH: /usr/lib/llvm-18/lib:${{ env.LD_LIBRARY_PATH }}
 
     steps:
       - name: Checkout repo
@@ -32,6 +31,9 @@ jobs:
           sudo apt-get install -y \
             clang-18 llvm-18-dev libclang-18-dev python3-clang-18 \
             build-essential libcmocka-dev
+
+      - name: Add LLVM to LD_LIBRARY_PATH
+        run: echo "LD_LIBRARY_PATH=/usr/lib/llvm-18/lib:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
 
       - name: Build (gen + unit/edge/fuzz)
         run: make all
