@@ -15,13 +15,10 @@ jobs:
         working-directory: Tests/unit_tests
 
     env:
-      # Let Makefile default CC=?=cc (GCC) for unit/edge; only force clang for fuzzers.
       FUZZ_CC: clang-18
-      FUZZ_SMOKE_SECS: "5"
-      FUZZ_MAX_SECS: "30"
-      # Make python-clang find libclang
+      FUZZ_SMOKE_SECS: "60"   # was 5
+      FUZZ_MAX_SECS: "60"     # was 30
       LIBCLANG_PATH: /usr/lib/llvm-18/lib
-      # Ensure `python3 -m autofuzz.main` can import `autofuzz`
       PYTHONPATH: ${{ github.workspace }}/Tests/unit_tests
 
     steps:
@@ -55,11 +52,11 @@ jobs:
       - name: Build (gen + unit/edge/fuzz)
         run: make all
 
-      - name: Run unit, edge, and smoke fuzz
+      - name: Run unit, edge, and 60s fuzz
         run: make test
         continue-on-error: true
 
-      - name: Full fuzz campaign
+      - name: Full fuzz campaign (60s)
         run: make fuzz
         continue-on-error: true
 
