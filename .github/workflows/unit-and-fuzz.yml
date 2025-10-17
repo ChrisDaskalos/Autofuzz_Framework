@@ -7,44 +7,53 @@ on:
 
 jobs:
   servo-tests:
-    runs-on: ubuntu-latest      # 24.04 → LLVM/Clang 18
+    runs-on: ubuntu-latest    # Ubuntu 24.04 → LLVM/Clang 18 available
 
     defaults:
       run:
         shell: bash
         working-directory: Tests/unit_tests
 
+    env:
+      # Use Clang-18 for both normal and fuzzer builds (Makefile honors CC/FUZZ_CC)
+      CC: clang-18
+      FUZZ_CC: clang-18
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install Clang-18 toolchain, matching Python bindings, and libs
+      - name: Install toolchain & libs
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             clang-18 llvm-18-dev libclang-18-dev python3-clang-18 \
-            build-essential lcov libcmocka-dev
+            build-essential libcmocka-dev
+
       - name: Point LIBCLANG_PATH at LLVM 18
         run: |
           echo "LIBCLANG_PATH=/usr/lib/llvm-18/lib" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=/usr/lib/llvm-18/lib:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
 
-      - name: Build everything
+      - name: Build (gen + unit/edge/fuzz)
         run: make all
 
-      # ⬇️  CONTINUE EVEN IF SOME TESTS FAIL
-      - name: Run unit & fuzz tests
+      # Continue even if some tests fail so we can still upload artifacts
+      - name: Run unit, edge, and smoke fuzz
         run: make test
-        continue-on-error: true        # ← key line
+        continue-on-error: true
 
-      # ⬇️  ALWAYS GENERATE COVERAGE (pass or fail)
-      - name: Generate coverage HTML
+      - name: Full fuzz campaign
+        run: make fuzz
+        continue-on-error: true
+
+      - name: Prepare artifacts folder
         if: always()
-        run: make coverage
+        run: mkdir -p crashes lf_corpus
 
-      - name: Upload coverage report
+      - name: Upload crashes (if any)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-html
-          path: cov_html/
+          name: fuzz-crashes
+          path: Tests/unit_tests/crashes
