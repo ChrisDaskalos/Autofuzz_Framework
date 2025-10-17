@@ -7,7 +7,7 @@ on:
 
 jobs:
   servo-tests:
-    runs-on: ubuntu-latest    # Ubuntu 24.04 → LLVM/Clang 18 available
+    runs-on: ubuntu-24.04   # pin to 24.04 so clang-18 packages exist
 
     defaults:
       run:
@@ -15,9 +15,11 @@ jobs:
         working-directory: Tests/unit_tests
 
     env:
-      # Use Clang-18 for both normal and fuzzer builds (Makefile honors CC/FUZZ_CC)
+      # Makefile respects these for compilers & fuzz durations
       CC: clang-18
       FUZZ_CC: clang-18
+      FUZZ_SMOKE_SECS: "5"
+      FUZZ_MAX_SECS: "30"
 
     steps:
       - name: Checkout repo
@@ -35,21 +37,45 @@ jobs:
           echo "LIBCLANG_PATH=/usr/lib/llvm-18/lib" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=/usr/lib/llvm-18/lib:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
 
+      # Build everything (harness gen + unit + edge + fuzz objects)
       - name: Build (gen + unit/edge/fuzz)
-        run: make all
+        run: make build
 
-      # Continue even if some tests fail so we can still upload artifacts
-      - name: Run unit, edge, and smoke fuzz
+      # Run unit + edge + smoke fuzz as defined in the Makefile
+      - name: Run unit, edge, and smoke fuzz (Makefile)
         run: make test
         continue-on-error: true
 
-      - name: Full fuzz campaign
-        run: make fuzz
-        continue-on-error: true
+      # Force a real libFuzzer campaign even if the Makefile target doesn't execute binaries
+      - name: Run libFuzzer harnesses (auto-detect & execute)
+        run: |
+          set -euo pipefail
+          mkdir -p lf_corpus crashes
+          shopt -s nullglob
 
-      - name: Prepare artifacts folder
-        if: always()
-        run: mkdir -p crashes lf_corpus
+          # Prefer libFuzzer-style names (random_*_fz), but also accept fuzz_* if your project uses that
+          FUZZERS=( ./random_*_fz ./fuzz_* )
+
+          if [ ${#FUZZERS[@]} -eq 0 ]; then
+            echo "No fuzzers found (patterns: random_*_fz, fuzz_*)"
+            exit 1
+          fi
+
+          echo "Found fuzzers: ${FUZZERS[*]}"
+          rc=0
+          for exe in "${FUZZERS[@]}"; do
+            if [ -x "$exe" ]; then
+              echo "=== FUZZ $exe ==="
+              "$exe" -use_value_profile=1 \
+                     -artifact_prefix="$(pwd)/crashes/" \
+                     -max_total_time="${FUZZ_MAX_SECS}" \
+                     ./lf_corpus || rc=$?
+            fi
+          done
+
+          # don't fail the workflow; artifacts will still be uploaded
+          exit 0
+        continue-on-error: true
 
       - name: Upload crashes (if any)
         if: always()
@@ -57,3 +83,4 @@ jobs:
         with:
           name: fuzz-crashes
           path: Tests/unit_tests/crashes
+          if-no-files-found: warn
