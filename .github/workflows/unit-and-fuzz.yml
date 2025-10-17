@@ -7,7 +7,7 @@ on:
 
 jobs:
   servo-tests:
-    runs-on: ubuntu-24.04   # pin to 24.04 so clang-18 packages exist
+    runs-on: ubuntu-24.04
 
     defaults:
       run:
@@ -15,11 +15,12 @@ jobs:
         working-directory: Tests/unit_tests
 
     env:
-      # Makefile respects these for compilers & fuzz durations
       CC: clang-18
       FUZZ_CC: clang-18
       FUZZ_SMOKE_SECS: "5"
       FUZZ_MAX_SECS: "30"
+      LIBCLANG_PATH: /usr/lib/llvm-18/lib
+      LD_LIBRARY_PATH: /usr/lib/llvm-18/lib:${{ env.LD_LIBRARY_PATH }}
 
     steps:
       - name: Checkout repo
@@ -32,49 +33,15 @@ jobs:
             clang-18 llvm-18-dev libclang-18-dev python3-clang-18 \
             build-essential libcmocka-dev
 
-      - name: Point LIBCLANG_PATH at LLVM 18
-        run: |
-          echo "LIBCLANG_PATH=/usr/lib/llvm-18/lib" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=/usr/lib/llvm-18/lib:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
-
-      # Build everything (harness gen + unit + edge + fuzz objects)
       - name: Build (gen + unit/edge/fuzz)
-        run: make build
+        run: make all
 
-      # Run unit + edge + smoke fuzz as defined in the Makefile
-      - name: Run unit, edge, and smoke fuzz (Makefile)
+      - name: Run unit, edge, and smoke fuzz
         run: make test
         continue-on-error: true
 
-      # Force a real libFuzzer campaign even if the Makefile target doesn't execute binaries
-      - name: Run libFuzzer harnesses (auto-detect & execute)
-        run: |
-          set -euo pipefail
-          mkdir -p lf_corpus crashes
-          shopt -s nullglob
-
-          # Prefer libFuzzer-style names (random_*_fz), but also accept fuzz_* if your project uses that
-          FUZZERS=( ./random_*_fz ./fuzz_* )
-
-          if [ ${#FUZZERS[@]} -eq 0 ]; then
-            echo "No fuzzers found (patterns: random_*_fz, fuzz_*)"
-            exit 1
-          fi
-
-          echo "Found fuzzers: ${FUZZERS[*]}"
-          rc=0
-          for exe in "${FUZZERS[@]}"; do
-            if [ -x "$exe" ]; then
-              echo "=== FUZZ $exe ==="
-              "$exe" -use_value_profile=1 \
-                     -artifact_prefix="$(pwd)/crashes/" \
-                     -max_total_time="${FUZZ_MAX_SECS}" \
-                     ./lf_corpus || rc=$?
-            fi
-          done
-
-          # don't fail the workflow; artifacts will still be uploaded
-          exit 0
+      - name: Full fuzz campaign
+        run: make fuzz
         continue-on-error: true
 
       - name: Upload crashes (if any)
