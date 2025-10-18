@@ -20,6 +20,9 @@ jobs:
       FUZZ_MAX_SECS: "60"
       LIBCLANG_PATH: /usr/lib/llvm-18/lib
       PYTHONPATH: ${{ github.workspace }}/Tests/unit_tests
+      # Enable colored output for CMocka
+      CMOCKA_MESSAGE_OUTPUT: STDOUT
+      CMOCKA_COLOR: on
     
     steps:
       - name: Checkout repository
@@ -46,30 +49,87 @@ jobs:
         run: make clean
       
       - name: Build all tests (generate + compile)
-        run: make build
+        run: |
+          echo "::group::Build Output"
+          make build
+          echo "::endgroup::"
       
       - name: Run manual unit tests
-        run: make unit
+        id: unit_tests
+        run: |
+          echo "::group::Manual Unit Tests"
+          make unit || echo "UNIT_FAILED=true" >> $GITHUB_OUTPUT
+          echo "::endgroup::"
         continue-on-error: true
       
       - name: Run deterministic edge tests
-        run: make edge
+        id: edge_tests
+        run: |
+          echo "::group::Deterministic Edge Tests"
+          make edge || echo "EDGE_FAILED=true" >> $GITHUB_OUTPUT
+          echo "::endgroup::"
         continue-on-error: true
       
+      - name: Check unit and edge test results
+        if: steps.unit_tests.outputs.UNIT_FAILED == 'true' || steps.edge_tests.outputs.EDGE_FAILED == 'true'
+        run: |
+          echo "❌ Some tests failed!"
+          if [ "${{ steps.unit_tests.outputs.UNIT_FAILED }}" == "true" ]; then
+            echo "  - Manual unit tests FAILED"
+          fi
+          if [ "${{ steps.edge_tests.outputs.EDGE_FAILED }}" == "true" ]; then
+            echo "  - Edge tests FAILED"
+          fi
+          exit 1
+      
       - name: Run random fuzzing tests (60s per fuzzer)
-        run: make fuzz
+        id: fuzz_tests
+        run: |
+          echo "::group::Random Fuzzing Tests"
+          make fuzz || echo "FUZZ_COMPLETED=true" >> $GITHUB_OUTPUT
+          echo "::endgroup::"
         continue-on-error: true
       
       - name: Check for crashes
         if: always()
+        id: crash_check
         run: |
           if [ -d crashes ] && [ -n "$(ls -A crashes/ 2>/dev/null)" ]; then
-            echo "Fuzz found crashes!"
-            echo "Crash files:"
+            echo "❌ Fuzzing found crashes!"
+            echo "📁 Crash files:"
             ls -lh crashes/
+            echo "CRASHES_FOUND=true" >> $GITHUB_OUTPUT
             exit 1
           else
-            echo "No crashes found!"
+            echo "✅ No crashes found!"
+            echo "CRASHES_FOUND=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Unit Tests
+          if [ "${{ steps.unit_tests.outputs.UNIT_FAILED }}" == "true" ]; then
+            echo "❌ **Manual Unit Tests**: FAILED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **Manual Unit Tests**: PASSED" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Edge Tests
+          if [ "${{ steps.edge_tests.outputs.EDGE_FAILED }}" == "true" ]; then
+            echo "❌ **Edge Tests**: FAILED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **Edge Tests**: PASSED" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Fuzz Tests
+          if [ "${{ steps.crash_check.outputs.CRASHES_FOUND }}" == "true" ]; then
+            echo "❌ **Fuzzing Tests**: CRASHES FOUND" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **Fuzzing Tests**: NO CRASHES" >> $GITHUB_STEP_SUMMARY
           fi
       
       - name: Upload crash artifacts
@@ -88,7 +148,7 @@ jobs:
           path: Tests/unit_tests/logs/
           if-no-files-found: ignore
       
-      - name: Upload corpus
+      - name: Upload test corpus
         if: success()
         uses: actions/upload-artifact@v4
         with:
