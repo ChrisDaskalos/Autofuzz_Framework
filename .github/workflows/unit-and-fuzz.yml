@@ -64,7 +64,7 @@ jobs:
         if: always()
         run: |
           if [ -d crashes ] && [ -n "$(ls -A crashes/ 2>/dev/null)" ]; then
-            echo "Fuzzing found crashes!"
+            echo "Fuzz found crashes!"
             echo "Crash files:"
             ls -lh crashes/
             exit 1
