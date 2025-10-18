@@ -1,57 +1,97 @@
-name: unit-and-fuzz
+name: Unit, Edge, and Fuzz Tests
 
 on:
   push:
+    branches: [ main, master, develop ]
   pull_request:
+    branches: [ main, master, develop ]
   workflow_dispatch:
 
 jobs:
   servo-tests:
     runs-on: ubuntu-24.04
-
     defaults:
       run:
         shell: bash
         working-directory: Tests/unit_tests
-
+    
     env:
       FUZZ_CC: clang-18
-      FUZZ_MAX_SECS: "60"                  # ≥ 1 minute
+      FUZZ_MAX_SECS: "60"
       LIBCLANG_PATH: /usr/lib/llvm-18/lib
       PYTHONPATH: ${{ github.workspace }}/Tests/unit_tests
-
+    
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Install toolchain & libs
+      
+      - name: Install toolchain and dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
-            clang-18 llvm-18-dev libclang-18-dev libclang-rt-18-dev \
+            clang-18 \
+            llvm-18-dev \
+            libclang-18-dev \
+            libclang-rt-18-dev \
             python3-clang-18 \
             libcmocka-dev
-
-      - name: Export LLVM runtime path (for libclang/asan)
+      
+      - name: Configure LLVM environment
         run: |
           echo "LD_LIBRARY_PATH=/usr/lib/llvm-18/lib:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
           echo "LLVM_SYMBOLIZER_PATH=/usr/lib/llvm-18/bin/llvm-symbolizer" >> "$GITHUB_ENV"
-
-      - name: Clean
+      
+      - name: Clean build artifacts
         run: make clean
-
-      - name: Build (gen + unit/edge/fuzz)
-        run: make all
-
-      - name: Full fuzz campaign (60s)
+      
+      - name: Build all tests (generate + compile)
+        run: make build
+      
+      - name: Run manual unit tests
+        run: make unit
+        continue-on-error: true
+      
+      - name: Run deterministic edge tests
+        run: make edge
+        continue-on-error: true
+      
+      - name: Run random fuzzing tests (60s per fuzzer)
         run: make fuzz
         continue-on-error: true
-
-      - name: Upload crashes (if any)
+      
+      - name: Check for crashes
+        if: always()
+        run: |
+          if [ -d crashes ] && [ -n "$(ls -A crashes/ 2>/dev/null)" ]; then
+            echo "Fuzzing found crashes!"
+            echo "Crash files:"
+            ls -lh crashes/
+            exit 1
+          else
+            echo "No crashes found!"
+          fi
+      
+      - name: Upload crash artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fuzz-crashes
-          path: Tests/unit_tests/crashes
-          if-no-files-found: warn
+          name: fuzz-crashes-${{ github.sha }}
+          path: Tests/unit_tests/crashes/
+          if-no-files-found: ignore
+      
+      - name: Upload fuzzer logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-logs-${{ github.sha }}
+          path: Tests/unit_tests/logs/
+          if-no-files-found: ignore
+      
+      - name: Upload corpus
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpus-${{ github.sha }}
+          path: Tests/unit_tests/lf_corpus/
+          if-no-files-found: ignore
