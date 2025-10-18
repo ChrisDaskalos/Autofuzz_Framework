@@ -41,5 +41,7 @@
 #define MOTOR_SHUTDOWN_MSG      "\r\nMOTOR SHUTDOWN: SERVO SET TO 90.\r\n"
 #define UNKNOWN_MENU_OPTION_MSG "\r\nUNKNOWN MENU OPTION.\r\n"
 #define CHECKSUM_ERROR_MSG      "\r\nCHECKSUM ERROR.\r\n"
+#define FORMAT_ERROR_MSG        "\r\nFORMAT ERROR: MUST BE ANGLE,STEP,CHECKSUM\r\n"
+#define CANCEL_MSG              "\r\nCANCELING\r\n"
 
 #endif // PROTOCOL_DEFS_H

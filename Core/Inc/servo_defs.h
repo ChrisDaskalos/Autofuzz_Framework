@@ -2,8 +2,8 @@
 #define SERVO_DEFS_H
 
 /* Absolute electrical limits of the servo*/
-#define SERVO_MIN_PULSE     500     /* µs */
-#define SERVO_MAX_PULSE     2500    /* µs */
+#define SERVO_MIN_PULSE     1000     /* µs */
+#define SERVO_MAX_PULSE     3000    /* µs */
 #define SERVO_PULSE_RANGE   (SERVO_MAX_PULSE - SERVO_MIN_PULSE)
 
 /* Logical angle range you exposing to user */

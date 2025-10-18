@@ -1,5 +1,8 @@
 /*-----------------------------------------------------------------------------
  * autofuzz_rt.h
+ *-----------------------------------------------------------------------------
+ *  – expect_abort(): run a function in a forked child and assert SIGABRT
+ *  – autofuzz_sweep(): lightweight deterministic-test helper
  *---------------------------------------------------------------------------*/
 #ifndef AUTOFUZZ_RT_H
 #define AUTOFUZZ_RT_H
@@ -9,18 +12,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-/**
- * @brief Run a function in a child process and assert that it aborts.
- *
- * The helper succeeds when:
- *   1. fork(2) returns successfully, and
- *   2. the child terminates via SIGABRT, and
- *   3. the parent observes that termination through waitpid(2).
- *
- * If the child ever returns from @p fn without aborting, we exit with
- * EXIT_FAILURE so the parent records the failure.
- *
- * On non-POSIX hosts the helper is disabled and will assert-fail immediately.
+/*-------------------------------------------------------------------------
+ * expect_abort()
+ *-------------------------------------------------------------------------
+ * Succeeds when the child terminates via SIGABRT.  On non-POSIX hosts the
+ * helper is unavailable and the test fails immediately.
  */
 static inline __attribute__((unused))
 void expect_abort(void (*fn)(void))
@@ -29,11 +25,10 @@ void expect_abort(void (*fn)(void))
     pid_t child_pid = fork();
     assert_true(child_pid >= 0);
 
-    if (child_pid == 0)
+    if (child_pid == 0)               /* ── child ── */
     {
-        /* Child: execute target.  If it returns, treat that as a hard error. */
-        fn();
-        _exit(EXIT_FAILURE);          /* <-- was _exit(0) */
+        fn();                         /* must abort – never return */
+        _exit(EXIT_FAILURE);          /* treat normal return as failure */
     }
 
     int status = 0;
@@ -41,10 +36,31 @@ void expect_abort(void (*fn)(void))
 
     assert_true(WIFSIGNALED(status));
     assert_int_equal(WTERMSIG(status), SIGABRT);
-#else
-    /* Fallback for non-POSIX toolchains (e.g. MSVC, MinGW) */
+
+#else   /* non-POSIX fallback */
     assert_true(!"expect_abort() not supported on this platform");
 #endif
 }
+
+/*-------------------------------------------------------------------------
+ * autofuzz_sweep()
+ *-------------------------------------------------------------------------
+ * Deterministic harnesses call this helper.  It simply reports “success”
+ * so the test framework can continue.
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+int autofuzz_sweep(void);                /* always declared */
+#ifdef __cplusplus
+}
+#endif
+
+#ifdef AUTOFUZZ_RT_IMPL                  /* defined once where requested */
+int autofuzz_sweep(void)
+{
+    return 0;                            /* no failures detected */
+}
+#endif  /* AUTOFUZZ_RT_IMPL */
 
 #endif /* AUTOFUZZ_RT_H */

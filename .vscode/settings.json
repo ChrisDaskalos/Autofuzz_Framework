@@ -7,6 +7,7 @@
         "stdint.h": "c",
         "cmocka.h": "c",
         "string.h": "c",
-        "protocol_defs.h": "c"
+        "protocol_defs.h": "c",
+        "servo_defs.h": "c"
     }
 }

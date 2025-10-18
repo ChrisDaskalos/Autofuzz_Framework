@@ -19,7 +19,7 @@ void Servo_SetAngle(uint8_t angle)
         SERVO_MIN_PULSE + ((angle * SERVO_PULSE_RANGE) / SERVO_MAX_ANGLE);
     __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pulse);
 
-#ifndef UNIT_TEST          /* keep verbose UART prints out of the fuzzer */
+#ifndef UNIT_TEST           /* keep verbose UART prints out of the fuzzer */
     char dbg[80];
     sprintf(dbg, "\r\n[DEBUG] SETTING SERVO TO %d (PULSE: %d)\r\n",
             angle, pulse);

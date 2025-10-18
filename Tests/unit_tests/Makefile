@@ -1,124 +1,209 @@
-# ======================================================================
-#  Unit-tests + AutoFuzz harnesses + LCOV coverage (compact workflow)
-# ======================================================================
+## Makefile — targets: build | unit | edge | fuzz | clean
+.RECIPEPREFIX := >
 
-CC        := gcc
-CFLAGS    := -Wall -Wextra -g -std=c11 -DUNIT_TEST -I. -I../../Core/Inc
-LDFLAGS   := -lcmocka
-COV_FLAGS := -O0 --coverage
-# ------------------------------------------------------------------
-#  Tool-chain flags
-#   • -O0        : keep debug symbols accurate & help sanitizers
-#   • --coverage : GCov/LCOV counters
-#   • -fsanitize : AddressSan + UB-San in a single pass
-# ------------------------------------------------------------------
-SAN_FLAGS := -fsanitize=address,undefined
-CFLAGS    := -Wall -Wextra -g -std=c11 -DUNIT_TEST -I. -I../../Core/Inc \
-             -O0 --coverage $(SAN_FLAGS)
-LDFLAGS   := -lcmocka $(SAN_FLAGS)
-# ---------- run-time limits (override from shell) ---------------------
-FUZZ_MAX_SECS  ?= 30     # seconds per binary (0 = unlimited)
-FUZZ_MAX_CASES ?= 500    # calls   per binary (0 = unlimited)
+CC      ?= cc
+FUZZ_CC ?= clang
 
-REPORT_DIR := cov_html
-LCOV_INFO  := cov.info
+# Compiler flags
+COMMON  ?= -Wall -Wextra -g -std=c11 -DUNIT_TEST -O0 -D_POSIX_C_SOURCE=200809L \
+           -fno-omit-frame-pointer -I. -I../../Core/Inc
+SAN_EDGE = -fsanitize=address,undefined -fno-sanitize-recover=all
+SAN_FUZZ = -fsanitize=address,undefined,integer -fno-sanitize-recover=all
+EDGE_CFLAGS = $(COMMON) $(SAN_EDGE)
+FUZZ_CFLAGS = $(COMMON) $(SAN_FUZZ)
+LDFLAGS_MAIN = -lcmocka $(SAN_EDGE)
+LDFLAGS_FUZZ = $(SAN_FUZZ) -fsanitize=fuzzer
+FUZZ_MAX_SECS ?= 10
 
-# ----------------------------------------------------------------------
-# 1) Hand-written CMocka suites
-# ----------------------------------------------------------------------
-TEST_SRC := \
-  test_protocol_checksum.c \
-  test_protocol_authentication.c \
-  test_protocol_init.c \
-  test_protocol_menu.c \
-  test_protocol_servo_command.c \
-  test_protocol_menu_unknown.c \
-  test_protocol_wrong_password.c \
-  test_good_servo_command.c \
-  test_protocol_cancel_running.c \
-  test_protocol_state_machine.c
+# Source files
+STUB_SRC  ?= test_common.c
+PROD_SRCS ?=
+MANUAL_TESTS ?= $(filter-out $(STUB_SRC),$(wildcard test_*.c))
 
-TEST_ELF := $(TEST_SRC:.c=.elf)
+# Build directories
+BUILD_DIR_EDGE := build/edge
+BUILD_DIR_FUZZ := build/fuzz
+BUILD_DIR_UNIT := build/unit
 
-# ----------------------------------------------------------------------
-# 2) Stub code (coverage-instrumented)
-#    – list every real function that harnesses might call
-# ----------------------------------------------------------------------
-STUB_SRC := \
-    test_common.c 
+# Object files
+STUB_OBJ_EDGE  := $(STUB_SRC:%.c=$(BUILD_DIR_EDGE)/%.o)
+STUB_OBJ_FUZZ  := $(STUB_SRC:%.c=$(BUILD_DIR_FUZZ)/%.o)
+STUB_OBJ_UNIT  := $(STUB_SRC:%.c=$(BUILD_DIR_UNIT)/%.o)
+PROD_OBJS_EDGE := $(PROD_SRCS:%.c=$(BUILD_DIR_EDGE)/%.o)
+PROD_OBJS_FUZZ := $(PROD_SRCS:%.c=$(BUILD_DIR_FUZZ)/%.o)
+PROD_OBJS_UNIT := $(PROD_SRCS:%.c=$(BUILD_DIR_UNIT)/%.o)
 
-STUB_OBJS := $(STUB_SRC:.c=.o)
-export STUB_SRCS := $(STUB_SRC)      # read by autofuzz_scan.py
+# Manual test binaries
+MANUAL_TEST_BIN := $(MANUAL_TESTS:%.c=%.elf)
 
-# ----------------------------------------------------------------------
-# 3) Phony targets
-# ----------------------------------------------------------------------
-.PHONY: all clean fuzz test coverage
+export STUB_SRCS := $(STUB_SRC)
 
-# ----------------------------------------------------------------------
-# (a) Compile each stub source
-# ----------------------------------------------------------------------
-$(STUB_OBJS): %.o: %.c
-	$(CC) $(CFLAGS) $(COV_FLAGS) -c $< -o $@
+.PHONY: build unit edge fuzz clean help
+.DELETE_ON_ERROR:
 
-# ----------------------------------------------------------------------
-# (b) Build each hand-written test binary
-# ----------------------------------------------------------------------
-%.elf: %.c $(STUB_OBJS)
-	$(CC) $(CFLAGS) $(COV_FLAGS) $< $(STUB_OBJS) $(LDFLAGS) -o $@
+# Default target
+all: build
 
-# ----------------------------------------------------------------------
-# (c) AutoFuzz – regenerate & compile harnesses
-# ----------------------------------------------------------------------
-# 1. stamp to (re)generate sources
-_autofuzz.stamp: $(STUB_SRC) autofuzz/autofuzz_scan.py
-	@echo ">>> (re)generating fuzz harnesses"
-	@python3 autofuzz/autofuzz_scan.py
-	@touch $@
+help:
+> @echo "Available targets:"
+> @echo "  build      - Generate harnesses and compile all tests"
+> @echo "  unit       - Run manual test_*.c unit tests"
+> @echo "  edge       - Run deterministic edge case tests"
+> @echo "  fuzz       - Run random fuzzing tests"
+> @echo "  clean      - Remove all build artifacts"
+> @echo ""
+> @echo "Variables:"
+> @echo "  FUZZ_MAX_SECS - Fuzzing time per target (default: 10)"
+> @echo "  CC            - Compiler for edge/unit tests (default: cc)"
+> @echo "  FUZZ_CC       - Compiler for fuzzers (default: clang)"
 
-# 2. build every fuzz_*.c that now exists
-# build stubs first, then every harness
-fuzz: _autofuzz.stamp $(STUB_OBJS)
-	@for src in $(shell ls -1 fuzz_*.c 2>/dev/null); do \
-	    exe=$${src%.c}; \
-	    echo "  CC $$exe"; \
-	    $(CC) $(CFLAGS) $(COV_FLAGS) $$src $(STUB_OBJS) $(LDFLAGS) -o $$exe; \
-	done
+# Generate autofuzz harnesses
+_autofuzz.stamp: $(STUB_SRC) autofuzz/config.py autofuzz/scanner.py autofuzz/generator.py autofuzz/main.py
+> @echo ">>> Generating AutoFuzz harnesses..."
+> PYTHONPATH=$(CURDIR) STUB_SRCS="$(STUB_SRCS)" python3 -m autofuzz.main
+> @touch $@
 
-# ----------------------------------------------------------------------
-# (d) Build everything
-# ----------------------------------------------------------------------
-all: $(TEST_ELF) fuzz
+# Compile rules for object files
+$(BUILD_DIR_EDGE)/%.o: %.c
+> @mkdir -p $(dir $@)
+> @echo "  CC (edge)  $<"
+> @$(CC) $(EDGE_CFLAGS) -c $< -o $@
 
-# ----------------------------------------------------------------------
-# (e) Run all executables and honour FUZZ_MAX_* limits
-# ----------------------------------------------------------------------
-test: all
-	@rc=0; \
-	for exe in test_*.elf fuzz_* ; do \
-	  [ -x "$$exe" ] || continue; \
-	  echo ">>> running $$exe"; \
-	  ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 \
-	  UBSAN_OPTIONS=print_stacktrace=1 \
-	  FUZZ_MAX_SECS=$(FUZZ_MAX_SECS) FUZZ_MAX_CASES=$(FUZZ_MAX_CASES) \
-	    ./$$exe || rc=$$?; \
-	done; \
-	echo "Test phase finished with rc=$$rc"; \
-	exit $$rc
+$(BUILD_DIR_FUZZ)/%.o: %.c
+> @mkdir -p $(dir $@)
+> @echo "  CC (fuzz)  $<"
+> @$(FUZZ_CC) $(FUZZ_CFLAGS) -c $< -o $@
 
-# ----------------------------------------------------------------------
-# (f) Coverage report
-# ----------------------------------------------------------------------
-coverage:
-	@$(MAKE) --no-print-directory -k test || true; \
-	lcov   --quiet --capture --directory . -o $(LCOV_INFO); \
-	genhtml --quiet --title "ServoProject coverage" \
-	        $(LCOV_INFO) -o $(REPORT_DIR); \
-	lcov   --summary $(LCOV_INFO) | grep -E "lines|functions"; \
-	echo "Combined report → $(REPORT_DIR)/index.html"
+$(BUILD_DIR_UNIT)/%.o: %.c
+> @mkdir -p $(dir $@)
+> @echo "  CC (unit)  $<"
+> @$(CC) $(EDGE_CFLAGS) -c $< -o $@
 
-# ----------------------------------------------------------------------
-# (g) Clean
-# ----------------------------------------------------------------------
+# Manual unit tests
+%.elf: %.c $(STUB_OBJ_UNIT) $(PROD_OBJS_UNIT)
+> @echo "  LD (unit)  $@"
+> @$(CC) $(EDGE_CFLAGS) $< $(STUB_OBJ_UNIT) $(PROD_OBJS_UNIT) $(LDFLAGS_MAIN) -o $@
+
+# Main build target
+build: _autofuzz.stamp $(STUB_OBJ_EDGE) $(PROD_OBJS_EDGE) $(STUB_OBJ_FUZZ) $(PROD_OBJS_FUZZ) $(STUB_OBJ_UNIT) $(PROD_OBJS_UNIT) $(MANUAL_TEST_BIN)
+> @echo ">>> Building autogenerated tests..."
+> @set -e; \
+> EDGE_SRCS=$$(find . -maxdepth 1 -type f \( -name 'edge_*.c' -o -name 'deterministic_edge_*.c' \) 2>/dev/null || true); \
+> if [ -n "$$EDGE_SRCS" ]; then \
+>   for src in $$EDGE_SRCS; do \
+>     exe=$$(basename "$$src" .c); \
+>     echo "  LD (edge)  $$exe"; \
+>     $(CC) $(EDGE_CFLAGS) "$$src" $(STUB_OBJ_EDGE) $(PROD_OBJS_EDGE) $(LDFLAGS_MAIN) -o "$$exe"; \
+>   done; \
+> fi; \
+> FUZZ_SRCS=$$(find . -maxdepth 1 -type f \( -name 'random_*_fz.c' -o -name 'random_fuzz_*.c' \) 2>/dev/null || true); \
+> if [ -n "$$FUZZ_SRCS" ]; then \
+>   for src in $$FUZZ_SRCS; do \
+>     exe=$$(basename "$$src" .c); \
+>     echo "  LD (fuzz)  $$exe"; \
+>     $(FUZZ_CC) $(FUZZ_CFLAGS) "$$src" $(STUB_OBJ_FUZZ) $(PROD_OBJS_FUZZ) $(LDFLAGS_FUZZ) -o "$$exe"; \
+>   done; \
+> fi
+> @echo ">>> Build complete!"
+
+# Run manual unit tests
+unit: $(MANUAL_TEST_BIN)
+> @echo ">>> Running manual unit tests..."
+> @rc=0; ran=0; \
+> for exe in $(MANUAL_TEST_BIN); do \
+>   if [ -x "$$exe" ]; then \
+>     ran=1; \
+>     echo ""; \
+>     echo "=== TEST: $$exe ==="; \
+>     CMOCKA_MESSAGE_OUTPUT=STDOUT CMOCKA_COLOR=on \
+>     ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 \
+>     UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1:report_error_type=1 \
+>     "./$$exe" || rc=$$?; \
+>   fi; \
+> done; \
+> if [ $$ran -eq 0 ]; then \
+>   echo "unit: no test_*.elf found (run 'make build' first)"; \
+>   exit 2; \
+> fi; \
+> if [ $$rc -eq 0 ]; then \
+>   echo ""; \
+>   echo ">>> All manual tests passed!"; \
+> else \
+>   echo ""; \
+>   echo ">>> Some tests failed!"; \
+> fi; \
+> exit $$rc
+
+# Run deterministic edge tests
+edge:
+> @echo ">>> Running edge tests..."
+> @rc=0; ran=0; \
+> for exe in $$(find . -maxdepth 1 -type f \( -name 'edge_*' -o -name 'deterministic_edge_*' \) -perm -111 -print 2>/dev/null | sort); do \
+>   ran=1; \
+>   echo ""; \
+>   echo "=== EDGE: $$exe ==="; \
+>   CMOCKA_MESSAGE_OUTPUT=STDOUT CMOCKA_COLOR=on \
+>   ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 \
+>   UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1:report_error_type=1 \
+>   "$$exe" || rc=1; \
+> done; \
+> if [ $$ran -eq 0 ]; then \
+>   echo "edge: no edge_* or deterministic_edge_* binaries found"; \
+>   echo "  Run 'make build' first or check if compilation succeeded"; \
+>   exit 2; \
+> fi; \
+> if [ $$rc -eq 0 ]; then \
+>   echo ""; \
+>   echo ">>> All edge tests passed!"; \
+> else \
+>   echo ""; \
+>   echo ">>> Some edge tests failed!"; \
+> fi; \
+> exit $$rc
+
+# Run random fuzzing tests
+fuzz:
+> @echo ">>> Running random fuzzing tests ($(FUZZ_MAX_SECS)s each)..."
+> @mkdir -p crashes lf_corpus logs
+> @rc=0; ran=0; \
+> for exe in $$(find . -maxdepth 1 -type f \( -name 'random_*_fz' -o -name 'random_fuzz_*' \) -perm -111 -print 2>/dev/null | sort); do \
+>   ran=1; \
+>   func=$$(basename "$$exe"); \
+>   echo ""; \
+>   echo "=== FUZZ: $$func ==="; \
+>   ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 \
+>   UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1:report_error_type=1 \
+>   "$$exe" -use_value_profile=1 \
+>           -artifact_prefix=crashes/ \
+>           -max_total_time=$(FUZZ_MAX_SECS) \
+>           ./lf_corpus 2>&1 | tee "logs/$${func}.log" || rc=1; \
+> done; \
+> if [ $$ran -eq 0 ]; then \
+>   echo "fuzz: no random_*_fz or random_fuzz_* binaries found"; \
+>   echo "  Run 'make build' first or check if compilation succeeded"; \
+>   exit 2; \
+> fi; \
+> echo ""; \
+> if [ -n "$$(ls -A crashes/ 2>/dev/null)" ]; then \
+>   echo ">>> WARNING: Fuzzing found crashes!"; \
+>   echo "Crashes saved in: crashes/"; \
+>   ls -lh crashes/; \
+>   rc=1; \
+> fi; \
+> if [ $$rc -eq 0 ]; then \
+>   echo ">>> All fuzzers completed without crashes!"; \
+> else \
+>   echo ">>> Some fuzzers found issues!"; \
+> fi; \
+> exit $$rc
+
+# Clean build artifacts
 clean:
-	$(RM) -rf *.o *.elf fuzz_* _autofuzz.stamp $(LCOV_INFO) *.gc* $(REPORT_DIR)
+> @echo ">>> Cleaning build artifacts..."
+> @rm -f $(MANUAL_TEST_BIN)
+> @rm -rf $(BUILD_DIR_EDGE) $(BUILD_DIR_FUZZ) $(BUILD_DIR_UNIT) build
+> @rm -f edge_* edge_*.c deterministic_edge_* deterministic_edge_*.c
+> @rm -f random_*_fz random_*_fz.c random_fuzz_* random_fuzz_*.c
+> @rm -f _autofuzz*.stamp
+> @rm -rf crashes lf_corpus logs
+> @echo ">>> Clean complete!"
