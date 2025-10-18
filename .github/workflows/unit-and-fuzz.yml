@@ -4,10 +4,20 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      fuzz_max_secs:
+        description: "Seconds per fuzzer"
+        required: false
+        default: "60"     # fallback when manually dispatched
+        type: string
 
 jobs:
   servo-tests:
-    runs-on: ubuntu-latest      # 24.04 → LLVM/Clang 18
+    runs-on: ubuntu-latest
+
+    # Make FUZZ_MAX_SECS available to `make fuzz`
+    env:
+      FUZZ_MAX_SECS: ${{ github.event.inputs.fuzz_max_secs || '60' }}
 
     defaults:
       run:
@@ -24,6 +34,7 @@ jobs:
           sudo apt-get install -y \
             clang-18 llvm-18-dev libclang-18-dev python3-clang-18 \
             build-essential lcov libcmocka-dev
+
       - name: Point LIBCLANG_PATH at LLVM 18
         run: |
           echo "LIBCLANG_PATH=/usr/lib/llvm-18/lib" >> $GITHUB_ENV
@@ -32,16 +43,14 @@ jobs:
       - name: Build everything
         run: make build
 
-      # ⬇️  CONTINUE EVEN IF SOME TESTS FAIL
       - name: Run unit tests
         run: make unit
-        continue-on-error: true        # ← key line
+        continue-on-error: true
 
-      # ⬇️  ALWAYS GENERATE COVERAGE (pass or fail)
       - name: Run edge tests
         run: make edge
         continue-on-error: true
-        
+
       - name: Run fuzz tests
         run: make fuzz
-        continue-on-error: true  
+        continue-on-error: true
