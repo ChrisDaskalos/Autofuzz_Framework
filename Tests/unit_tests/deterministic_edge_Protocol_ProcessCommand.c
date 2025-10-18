@@ -8,7 +8,7 @@
 
 #include "test_common.h"
 
-static char * a1_vals[] = { "0", "1", "-1" };
+static char * a1_vals[] = { "0", "-1", "1" };
 #define a1_vals_LEN (sizeof(a1_vals)/sizeof(a1_vals[0]))
 
 static void test_Protocol_ProcessCommand_edge_1(void **state) {

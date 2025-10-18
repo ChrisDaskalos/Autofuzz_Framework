@@ -8,7 +8,7 @@
 
 #include "test_common.h"
 
-static unsigned char a0_vals[] = { 0, 1, -1 };
+static unsigned char a0_vals[] = { 0, -1, 1 };
 #define a0_vals_LEN (sizeof(a0_vals)/sizeof(a0_vals[0]))
 
 static void test_Servo_SetAngle_edge_1(void **state) {

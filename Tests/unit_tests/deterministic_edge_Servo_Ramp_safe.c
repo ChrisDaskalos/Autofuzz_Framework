@@ -8,11 +8,11 @@
 
 #include "test_common.h"
 
-static unsigned char a0_vals[] = { 0, 1, -1 };
+static unsigned char a0_vals[] = { 0, -1, 1 };
 #define a0_vals_LEN (sizeof(a0_vals)/sizeof(a0_vals[0]))
-static unsigned char a1_vals[] = { 0, 1, -1 };
+static unsigned char a1_vals[] = { 0, -1, 1 };
 #define a1_vals_LEN (sizeof(a1_vals)/sizeof(a1_vals[0]))
-static unsigned char a2_vals[] = { 0, 1, -1 };
+static unsigned char a2_vals[] = { 0, -1, 1 };
 #define a2_vals_LEN (sizeof(a2_vals)/sizeof(a2_vals[0]))
 
 static void test_Servo_Ramp_safe_edge_1(void **state) {
