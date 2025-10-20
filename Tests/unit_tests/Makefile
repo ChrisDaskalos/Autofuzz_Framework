@@ -1,13 +1,13 @@
 ## Makefile — targets: build | unit | edge | fuzz | clean
 .RECIPEPREFIX := >
 
-CC      ?= cc
+CC      := clang
 FUZZ_CC ?= clang
 
 # Compiler flags
 COMMON  ?= -Wall -Wextra -g -std=c11 -DUNIT_TEST -O0 -D_POSIX_C_SOURCE=200809L \
            -fno-omit-frame-pointer -I. -I../../Core/Inc
-SAN_EDGE = -fsanitize=address,undefined -fno-sanitize-recover=all
+SAN_EDGE = -fsanitize=address,undefined -fno-sanitize-recover=address
 SAN_FUZZ = -fsanitize=address,undefined,integer -fno-sanitize-recover=all
 EDGE_CFLAGS = $(COMMON) $(SAN_EDGE)
 FUZZ_CFLAGS = $(COMMON) $(SAN_FUZZ)

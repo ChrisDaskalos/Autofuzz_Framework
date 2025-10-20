@@ -1,37 +1,32 @@
 # File: autofuzz/generator.py
+"""
+FINAL VERSION - Recognizes INT_MAX both as constant and literal value
+"""
 from pathlib import Path
 from typing import Sequence, Set, List, Any, Dict
 import re
+import itertools
 
-# Pull everything we need from config.py
 from .config import EDGE_CAP, STRING_SEEDS, GENERIC_EDGES, FZ_MAX_LEN
 
 # ─────────────────────────────────────────────────────────────────────
-# Helpers
+# Type detection helpers
 # ─────────────────────────────────────────────────────────────────────
 _PROTOCTX_PTR = re.compile(r"\bProtocolContext\s*\*")
 
 def _clean_type(pt: str) -> str:
-    # normalize whitespace and drop duplicate spaces, keep pointer stars
     t = pt.replace("const", "").strip()
     t = " ".join(t.split())
     t = t.replace(" *", "*").replace("* ", "*")
     return t
 
 def _canonical_key_for_generic(pt: str) -> str:
-    """
-    Map a parameter type to a key that likely exists in GENERIC_EDGES.
-    Falls back to the original string if already a direct hit.
-    """
+    """Map a parameter type to a key that likely exists in GENERIC_EDGES."""
     raw = pt.strip()
     t = _clean_type(raw)
-
-    # direct hits first
     if t in GENERIC_EDGES:
         return t
-
-    # common synonyms / normalizations
-    # note: we intentionally keep spaces in 'unsigned int'
+    
     synonyms: Dict[str, str] = {
         "signed int": "int",
         "int32_t": "int32_t",
@@ -40,29 +35,28 @@ def _canonical_key_for_generic(pt: str) -> str:
         "ssize_t": "ssize_t",
         "unsigned": "unsigned int",
         "unsigned int": "unsigned int",
-        "long": "int64_t",         # conservative mapping
+        "long": "int64_t",
         "unsigned long": "uint64_t",
         "long long": "int64_t",
         "unsigned long long": "uint64_t",
-        "char*": "const char *",   # route string-y types to config string seeds
+        "char*": "const char *",
         "char *": "const char *",
     }
-
+    
     if t in synonyms and synonyms[t] in GENERIC_EDGES:
         return synonyms[t]
-
-    # last resort: try the original (un-cleaned) and a few variations
+    
     candidates = [raw, raw.replace("const", "").strip(), t.replace(" *", "*")]
     for c in candidates:
         if c in GENERIC_EDGES:
             return c
-
-    return t  # may not exist; caller will handle fallback
+    
+    return t
 
 def _is_string(pt: str) -> bool:
     t = _clean_type(pt)
     t_nospace = t.replace(" ", "")
-    return t_nospace in ("char*",) or "char*" in t_nospace  # tolerate odd spellings
+    return "char*" in t_nospace
 
 def _is_pointer(pt: str) -> bool:
     return "*" in pt
@@ -71,6 +65,23 @@ def _is_signed32(pt: str) -> bool:
     t = _clean_type(pt)
     return t in ("int", "signed int", "int32_t")
 
+def _is_integer_type(pt: str) -> bool:
+    """Check if type is any integer type."""
+    t = _clean_type(pt)
+    int_types = {
+        "int", "signed int", "unsigned int",
+        "int8_t", "uint8_t", "int16_t", "uint16_t",
+        "int32_t", "uint32_t", "int64_t", "uint64_t",
+        "short", "long", "unsigned", "signed"
+    }
+    return t in int_types
+
+def _needs_protocol_ctx(param_types: Sequence[str]) -> bool:
+    return bool(param_types and _PROTOCTX_PTR.search(param_types[0]))
+
+# ─────────────────────────────────────────────────────────────────────
+# Token normalization helpers
+# ─────────────────────────────────────────────────────────────────────
 def _looks_c_string_literal(tok: str) -> bool:
     tok = tok.strip()
     return len(tok) >= 2 and tok[0] == '"' and tok[-1] == '"'
@@ -117,26 +128,25 @@ def _clamp_signed32(tok: str, raw: Any) -> str:
     except Exception:
         return t
 
+# ─────────────────────────────────────────────────────────────────────
+# Edge value generation
+# ─────────────────────────────────────────────────────────────────────
 def _lookup_generic_edges_for_type(pt: str) -> List[Any]:
-    """
-    Ask config.GENERIC_EDGES for this parameter's canonical edge values.
-    If it's a string, prefer STRING_SEEDS from config.
-    """
+    """Get edge values for a type from config."""
     if _is_string(pt):
         return STRING_SEEDS[:EDGE_CAP] if STRING_SEEDS else ['""']
     key = _canonical_key_for_generic(pt)
     vals = GENERIC_EDGES.get(key)
     if vals:
         return vals[:EDGE_CAP]
-    # Unknown type fallback
     if _is_pointer(pt):
         return ['NULL']
     return ['0', '1', '-1', 'INT_MAX', 'INT_MIN']
 
 def _seed_list(pt: str, seeds: List[Any]) -> List[str]:
     """
-    Turn a list of raw seeds (ints/strings) into C tokens, or
-    use config-backed GENERIC_EDGES/STRING_SEEDS when seeds are missing.
+    Turn a list of raw seeds into C tokens, ensuring extremes for integers.
+    FIXED: Removes duplicates and guarantees INT_MIN/INT_MAX presence.
     """
     if not seeds:
         seeds = _lookup_generic_edges_for_type(pt)
@@ -144,7 +154,7 @@ def _seed_list(pt: str, seeds: List[Any]) -> List[str]:
     out: List[str] = []
     for raw in seeds[:EDGE_CAP]:
         tok = _normalize_token(raw)
-
+        
         if _is_string(pt):
             out.append(tok if _looks_c_string_literal(tok) else _escape_c_string(tok))
             continue
@@ -156,24 +166,166 @@ def _seed_list(pt: str, seeds: List[Any]) -> List[str]:
         else:
             out.append(tok)
 
+    # *** FIX 1: Remove duplicates while preserving order ***
+    seen = set()
+    unique_out = []
+    for val in out:
+        if val not in seen:
+            seen.add(val)
+            unique_out.append(val)
+    out = unique_out
+
+    # *** FIX 2: For integer types, ensure INT_MIN and INT_MAX are present ***
+    if _is_integer_type(pt) and out:
+        has_int_max = any(v in ["2147483647", "INT_MAX"] for v in out)
+        has_int_min = any(v in ["-2147483648", "INT_MIN"] for v in out)
+        
+        if not has_int_min:
+            out.insert(0, "INT_MIN")
+        if not has_int_max:
+            out.append("INT_MAX")
+        
+        # Re-cap if we added values
+        if len(out) > EDGE_CAP:
+            middle_start = 1
+            middle_end = EDGE_CAP - 1
+            out = [out[0]] + out[middle_start:middle_end] + [out[-1]]
+
     return out or (['""'] if _is_string(pt) else (['NULL'] if _is_pointer(pt) else ['0']))
 
-def _auto_case_count(arr_lens: List[int]) -> int:
-    arr_lens = [n for n in arr_lens if n > 0]
-    if not arr_lens:
-        return 1
-    return max(1, min(12, max(arr_lens)))
-
 def _make_arg_decl(i: int, pt: str) -> str:
-    if _is_string(pt):  return f'{pt} a{i} = "";'
-    if _is_pointer(pt): return f'{pt} a{i} = NULL;'
+    """Generate variable declaration for a parameter."""
+    if _is_string(pt):
+        return f'{pt} a{i} = "";'
+    if _is_pointer(pt):
+        return f'{pt} a{i} = NULL;'
     return f'{pt} a{i} = ({pt})0;'
 
-def _needs_protocol_ctx(param_types: Sequence[str]) -> bool:
-    return bool(param_types and _PROTOCTX_PTR.search(param_types[0]))
+# ─────────────────────────────────────────────────────────────────────
+# Smart test combination generation
+# ─────────────────────────────────────────────────────────────────────
+def _generate_test_combinations(seeds_per_param: List[List[str]], 
+                                needs_ctx: bool,
+                                max_tests: int = 12) -> List[List[str]]:
+    """
+    Generate smart combinations ensuring extremes are tested.
+    CRITICAL FIX: Recognizes INT_MAX both as constant and literal value.
+    """
+    testable_seeds = []
+    for i, seeds in enumerate(seeds_per_param):
+        if needs_ctx and i == 0:
+            continue
+        if seeds:
+            testable_seeds.append(seeds)
+    
+    if not testable_seeds:
+        return [[]]
+    
+    if len(testable_seeds) == 1:
+        # Single parameter: iterate through values
+        return [[val] for val in testable_seeds[0][:max_tests]]
+    
+    if len(testable_seeds) == 2:
+        # Remove duplicates from each parameter
+        unique_seeds = []
+        for seeds in testable_seeds:
+            seen = set()
+            unique = []
+            for s in seeds:
+                if s not in seen:
+                    seen.add(s)
+                    unique.append(s)
+            unique_seeds.append(unique)
+        
+        combos_to_test = []
+        
+        # For each parameter, select 4 strategic values
+        for param_idx, seeds in enumerate(unique_seeds):
+            if len(seeds) <= 4:
+                combos_to_test.append(seeds)
+            else:
+                # *** CRITICAL FIX: Guarantee both extremes are kept ***
+                selected = []
+                
+                # MUST HAVE: minimum (first element)
+                selected.append(seeds[0])
+                
+                # MUST HAVE: maximum (last element)
+                selected.append(seeds[-1])
+                
+                # HIGHLY DESIRED: small positive value (for overflow testing)
+                small_positive = None
+                for s in seeds:
+                    try:
+                        if s in ["1", "2", "3"]:
+                            small_positive = s
+                            break
+                        val = int(s) if (s.isdigit() or (s.startswith('-') and s[1:].isdigit())) else None
+                        if val is not None and 1 <= val <= 10:
+                            small_positive = s
+                            break
+                    except:
+                        pass
+                
+                if small_positive and small_positive not in selected:
+                    selected.append(small_positive)
+                
+                # Fill to 4 values: add near-minimum or middle value
+                if len(selected) < 4:
+                    for candidate in [seeds[1], "0", seeds[len(seeds)//2], seeds[-2]]:
+                        if candidate in seeds and candidate not in selected:
+                            selected.append(candidate)
+                            if len(selected) >= 4:
+                                break
+                
+                combos_to_test.append(selected)
+        
+        # Generate cartesian product
+        all_combos = list(itertools.product(*combos_to_test))
+        
+        # *** CRITICAL FIX: Prioritize overflow-likely combinations ***
+        def combo_priority(combo):
+            """Lower score = higher priority. Prioritize overflow-inducing combos."""
+            score = 0
+            for val in combo:
+                try:
+                    v_str = val.replace("INT_MAX", "2147483647").replace("INT_MIN", "-2147483648")
+                    v = int(v_str)
+                    
+                    # *** FIXED: Recognize INT_MAX/INT_MIN by value ***
+                    if v == 2147483647 or v == -2147483648:  # Exact extreme values
+                        score -= 2000  # Highest priority
+                    elif abs(v) > 1000000000:  # Other large values
+                        score -= 1000
+                    elif 1 <= v <= 10:  # Small positive (for overflow)
+                        score -= 100
+                except:
+                    pass
+            return score
+        
+        sorted_combos = sorted(all_combos, key=combo_priority)
+        return [list(combo) for combo in sorted_combos[:max_tests]]
+    
+    # 3+ parameters: corners strategy
+    corners = []
+    corners.append([seeds[0] for seeds in testable_seeds])
+    corners.append([seeds[-1] for seeds in testable_seeds])
+    corners.append([seeds[len(seeds)//2] for seeds in testable_seeds])
+    
+    if len(testable_seeds) > 0:
+        corners.append([testable_seeds[0][0]] + [seeds[-1] for seeds in testable_seeds[1:]])
+        corners.append([testable_seeds[0][-1]] + [seeds[0] for seeds in testable_seeds[1:]])
+    
+    max_len = max(len(seeds) for seeds in testable_seeds)
+    for i in range(min(max_tests - len(corners), max_len)):
+        combo = [seeds[i % len(seeds)] for seeds in testable_seeds]
+        if combo not in corners:
+            corners.append(combo)
+    
+    return corners[:max_tests]
 
 # ─────────────────────────────────────────────────────────────────────
-# Edge harness → CMocka tests (Deterministic)
+# Edge harness generation (CMocka-based deterministic tests)
 # ─────────────────────────────────────────────────────────────────────
 def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequence[Set[str]]) -> str:
     """Generate CMocka test harness with edge cases for deterministic testing."""
@@ -199,9 +351,11 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
         if needs_ctx and i == 0:
             seeds_per_param.append([])
             continue
+        
         # Prefer per-function edges if supplied; otherwise consult config.GENERIC_EDGES
         seed_set_raw = list(edges[i]) if (i < len(edges) and edges[i] is not None) else []
         vals = _seed_list(pt, seed_set_raw)
+        
         arr_name = f"a{i}_vals"
         init = ", ".join(vals)
         out.append(f'static {pt} {arr_name}[] = {{ {init} }};')
@@ -211,14 +365,13 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
     if param_types:
         out.append("")
 
-    # Calculate number of test cases
-    arr_lens = [(0 if (needs_ctx and i == 0) else len(v)) for i, v in enumerate(seeds_per_param)]
-    total_cases = _auto_case_count(arr_lens)
+    # Generate test combinations
+    test_combinations = _generate_test_combinations(seeds_per_param, needs_ctx, max_tests=12)
 
     # Generate individual test functions
     test_names: List[str] = []
-    for case_idx in range(total_cases):
-        tname = f"test_{func}_edge_{case_idx+1}"
+    for combo_idx, combo_values in enumerate(test_combinations):
+        tname = f"test_{func}_edge_{combo_idx+1}"
         test_names.append(tname)
         body: List[str] = [
             f"static void {tname}(void **state) {{",
@@ -233,21 +386,27 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
                 body.append("    ctx.authenticated = 1;")
                 body.append("    ctx.state = STATE_WAIT_SERVO;")
 
-        # Declare and initialize parameters
+        # Declare and initialize parameters with values from combination
+        value_idx = 0
         for i, pt in enumerate(param_types):
             if needs_ctx and i == 0:
                 continue
-            body.append("    " + _make_arg_decl(i, pt))
-
-        # Set parameter values from seed arrays
-        for i, pt in enumerate(param_types):
-            if needs_ctx and i == 0:
-                continue
-            vals = seeds_per_param[i]
-            if len(vals) > 0:
-                idx = case_idx % len(vals)
-                arr = f"a{i}_vals"
-                body.append(f"    a{i} = {arr}[{idx}];")
+            
+            # Get value from combination
+            if value_idx < len(combo_values):
+                val = combo_values[value_idx]
+            else:
+                val = '0' if not _is_string(pt) else '""'
+            
+            # Declare and assign
+            if _is_string(pt):
+                body.append(f'    {pt} a{i} = {val};')
+            elif _is_pointer(pt):
+                body.append(f'    {pt} a{i} = {val};')
+            else:
+                body.append(f'    {pt} a{i} = ({pt}){val};')
+            
+            value_idx += 1
 
         # Make the actual function call
         call_args = []
@@ -280,7 +439,7 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
     return "\n".join(out)
 
 # ─────────────────────────────────────────────────────────────────────
-# libFuzzer harness (Random fuzzing)
+# libFuzzer harness generation (Random fuzzing)
 # ─────────────────────────────────────────────────────────────────────
 def _emit_libfuzzer_harness_src(func: str, param_types: Sequence[str]) -> str:
     """Generate libFuzzer harness for random fuzzing, honoring FZ_MAX_LEN."""

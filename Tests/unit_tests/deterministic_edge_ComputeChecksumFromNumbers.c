@@ -8,17 +8,15 @@
 
 #include "test_common.h"
 
-static int a0_vals[] = { -2147483648, -2147483647, -32768, 0, 1, 2, 32768, 32767, -32768, 2147483647, 32767, 2147483646, 65535, 32768, -2, 2, 1, -1, -2147483647, 0, -2147483648, 2147483646, -1, 65535, -2, 2147483647 };
+static int a0_vals[] = { -2147483648, -2147483647, -32768, 0, 1, 2, 32768, 32767, -2, 2147483647, 65535 };
 #define a0_vals_LEN (sizeof(a0_vals)/sizeof(a0_vals[0]))
-static int a1_vals[] = { -2147483648, -2147483647, -32768, 0, 1, 2, 32768, 32767, -32768, 2147483647, 32767, 2147483646, 65535, 32768, -2, 2, 1, -1, -2147483647, 0, -2147483648, 2147483646, -1, 65535, -2, 2147483647 };
+static int a1_vals[] = { -2147483648, -2147483647, -32768, 0, 1, 2, 32768, 32767, -2, 2147483647, 65535 };
 #define a1_vals_LEN (sizeof(a1_vals)/sizeof(a1_vals[0]))
 
 static void test_ComputeChecksumFromNumbers_edge_1(void **state) {
     (void)state;
-    int a0 = (int)0;
-    int a1 = (int)0;
-    a0 = a0_vals[0];
-    a1 = a1_vals[0];
+    int a0 = (int)-2147483648;
+    int a1 = (int)-2147483648;
 
     /* Call target function */
     ComputeChecksumFromNumbers(a0, a1);
@@ -28,10 +26,8 @@ static void test_ComputeChecksumFromNumbers_edge_1(void **state) {
 
 static void test_ComputeChecksumFromNumbers_edge_2(void **state) {
     (void)state;
-    int a0 = (int)0;
-    int a1 = (int)0;
-    a0 = a0_vals[1];
-    a1 = a1_vals[1];
+    int a0 = (int)-2147483648;
+    int a1 = (int)-2147483647;
 
     /* Call target function */
     ComputeChecksumFromNumbers(a0, a1);
@@ -41,10 +37,8 @@ static void test_ComputeChecksumFromNumbers_edge_2(void **state) {
 
 static void test_ComputeChecksumFromNumbers_edge_3(void **state) {
     (void)state;
-    int a0 = (int)0;
-    int a1 = (int)0;
-    a0 = a0_vals[2];
-    a1 = a1_vals[2];
+    int a0 = (int)-2147483647;
+    int a1 = (int)-2147483648;
 
     /* Call target function */
     ComputeChecksumFromNumbers(a0, a1);
@@ -54,10 +48,8 @@ static void test_ComputeChecksumFromNumbers_edge_3(void **state) {
 
 static void test_ComputeChecksumFromNumbers_edge_4(void **state) {
     (void)state;
-    int a0 = (int)0;
-    int a1 = (int)0;
-    a0 = a0_vals[3];
-    a1 = a1_vals[3];
+    int a0 = (int)-2147483648;
+    int a1 = (int)1;
 
     /* Call target function */
     ComputeChecksumFromNumbers(a0, a1);
@@ -67,10 +59,8 @@ static void test_ComputeChecksumFromNumbers_edge_4(void **state) {
 
 static void test_ComputeChecksumFromNumbers_edge_5(void **state) {
     (void)state;
-    int a0 = (int)0;
-    int a1 = (int)0;
-    a0 = a0_vals[4];
-    a1 = a1_vals[4];
+    int a0 = (int)1;
+    int a1 = (int)-2147483648;
 
     /* Call target function */
     ComputeChecksumFromNumbers(a0, a1);
@@ -80,10 +70,8 @@ static void test_ComputeChecksumFromNumbers_edge_5(void **state) {
 
 static void test_ComputeChecksumFromNumbers_edge_6(void **state) {
     (void)state;
-    int a0 = (int)0;
-    int a1 = (int)0;
-    a0 = a0_vals[5];
-    a1 = a1_vals[5];
+    int a0 = (int)-2147483648;
+    int a1 = (int)65535;
 
     /* Call target function */
     ComputeChecksumFromNumbers(a0, a1);
@@ -93,10 +81,8 @@ static void test_ComputeChecksumFromNumbers_edge_6(void **state) {
 
 static void test_ComputeChecksumFromNumbers_edge_7(void **state) {
     (void)state;
-    int a0 = (int)0;
-    int a1 = (int)0;
-    a0 = a0_vals[6];
-    a1 = a1_vals[6];
+    int a0 = (int)65535;
+    int a1 = (int)-2147483648;
 
     /* Call target function */
     ComputeChecksumFromNumbers(a0, a1);
@@ -106,10 +92,8 @@ static void test_ComputeChecksumFromNumbers_edge_7(void **state) {
 
 static void test_ComputeChecksumFromNumbers_edge_8(void **state) {
     (void)state;
-    int a0 = (int)0;
-    int a1 = (int)0;
-    a0 = a0_vals[7];
-    a1 = a1_vals[7];
+    int a0 = (int)-2147483647;
+    int a1 = (int)-2147483647;
 
     /* Call target function */
     ComputeChecksumFromNumbers(a0, a1);
@@ -119,10 +103,8 @@ static void test_ComputeChecksumFromNumbers_edge_8(void **state) {
 
 static void test_ComputeChecksumFromNumbers_edge_9(void **state) {
     (void)state;
-    int a0 = (int)0;
-    int a1 = (int)0;
-    a0 = a0_vals[8];
-    a1 = a1_vals[8];
+    int a0 = (int)1;
+    int a1 = (int)-2147483647;
 
     /* Call target function */
     ComputeChecksumFromNumbers(a0, a1);
@@ -132,10 +114,8 @@ static void test_ComputeChecksumFromNumbers_edge_9(void **state) {
 
 static void test_ComputeChecksumFromNumbers_edge_10(void **state) {
     (void)state;
-    int a0 = (int)0;
-    int a1 = (int)0;
-    a0 = a0_vals[9];
-    a1 = a1_vals[9];
+    int a0 = (int)-2147483647;
+    int a1 = (int)1;
 
     /* Call target function */
     ComputeChecksumFromNumbers(a0, a1);
@@ -145,10 +125,8 @@ static void test_ComputeChecksumFromNumbers_edge_10(void **state) {
 
 static void test_ComputeChecksumFromNumbers_edge_11(void **state) {
     (void)state;
-    int a0 = (int)0;
-    int a1 = (int)0;
-    a0 = a0_vals[10];
-    a1 = a1_vals[10];
+    int a0 = (int)65535;
+    int a1 = (int)-2147483647;
 
     /* Call target function */
     ComputeChecksumFromNumbers(a0, a1);
@@ -158,10 +136,8 @@ static void test_ComputeChecksumFromNumbers_edge_11(void **state) {
 
 static void test_ComputeChecksumFromNumbers_edge_12(void **state) {
     (void)state;
-    int a0 = (int)0;
-    int a1 = (int)0;
-    a0 = a0_vals[11];
-    a1 = a1_vals[11];
+    int a0 = (int)-2147483647;
+    int a1 = (int)65535;
 
     /* Call target function */
     ComputeChecksumFromNumbers(a0, a1);

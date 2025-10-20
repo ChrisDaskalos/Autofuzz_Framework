@@ -8,13 +8,12 @@
 
 #include "test_common.h"
 
-static unsigned int a0_vals[] = { 0, 1, 2, 32768, 2147483648, 2147483647, 32767, 32767, 4294967295, 65535, 32768, 2, 65535, 1, 0, 4294967294, 4294967295, 2147483648, 4294967294, 2147483647 };
+static unsigned int a0_vals[] = { INT_MIN, 0, 1, 2, 32768, 2147483648, 32767, 4294967294, 2147483647, 65535 };
 #define a0_vals_LEN (sizeof(a0_vals)/sizeof(a0_vals[0]))
 
 static void test_HAL_Delay_edge_1(void **state) {
     (void)state;
-    unsigned int a0 = (unsigned int)0;
-    a0 = a0_vals[0];
+    unsigned int a0 = (unsigned int)INT_MIN;
 
     /* Call target function */
     HAL_Delay(a0);
@@ -25,7 +24,6 @@ static void test_HAL_Delay_edge_1(void **state) {
 static void test_HAL_Delay_edge_2(void **state) {
     (void)state;
     unsigned int a0 = (unsigned int)0;
-    a0 = a0_vals[1];
 
     /* Call target function */
     HAL_Delay(a0);
@@ -35,8 +33,7 @@ static void test_HAL_Delay_edge_2(void **state) {
 
 static void test_HAL_Delay_edge_3(void **state) {
     (void)state;
-    unsigned int a0 = (unsigned int)0;
-    a0 = a0_vals[2];
+    unsigned int a0 = (unsigned int)1;
 
     /* Call target function */
     HAL_Delay(a0);
@@ -46,8 +43,7 @@ static void test_HAL_Delay_edge_3(void **state) {
 
 static void test_HAL_Delay_edge_4(void **state) {
     (void)state;
-    unsigned int a0 = (unsigned int)0;
-    a0 = a0_vals[3];
+    unsigned int a0 = (unsigned int)2;
 
     /* Call target function */
     HAL_Delay(a0);
@@ -57,8 +53,7 @@ static void test_HAL_Delay_edge_4(void **state) {
 
 static void test_HAL_Delay_edge_5(void **state) {
     (void)state;
-    unsigned int a0 = (unsigned int)0;
-    a0 = a0_vals[4];
+    unsigned int a0 = (unsigned int)32768;
 
     /* Call target function */
     HAL_Delay(a0);
@@ -68,8 +63,7 @@ static void test_HAL_Delay_edge_5(void **state) {
 
 static void test_HAL_Delay_edge_6(void **state) {
     (void)state;
-    unsigned int a0 = (unsigned int)0;
-    a0 = a0_vals[5];
+    unsigned int a0 = (unsigned int)2147483648;
 
     /* Call target function */
     HAL_Delay(a0);
@@ -79,8 +73,7 @@ static void test_HAL_Delay_edge_6(void **state) {
 
 static void test_HAL_Delay_edge_7(void **state) {
     (void)state;
-    unsigned int a0 = (unsigned int)0;
-    a0 = a0_vals[6];
+    unsigned int a0 = (unsigned int)32767;
 
     /* Call target function */
     HAL_Delay(a0);
@@ -90,8 +83,7 @@ static void test_HAL_Delay_edge_7(void **state) {
 
 static void test_HAL_Delay_edge_8(void **state) {
     (void)state;
-    unsigned int a0 = (unsigned int)0;
-    a0 = a0_vals[7];
+    unsigned int a0 = (unsigned int)4294967294;
 
     /* Call target function */
     HAL_Delay(a0);
@@ -101,8 +93,7 @@ static void test_HAL_Delay_edge_8(void **state) {
 
 static void test_HAL_Delay_edge_9(void **state) {
     (void)state;
-    unsigned int a0 = (unsigned int)0;
-    a0 = a0_vals[8];
+    unsigned int a0 = (unsigned int)2147483647;
 
     /* Call target function */
     HAL_Delay(a0);
@@ -112,30 +103,7 @@ static void test_HAL_Delay_edge_9(void **state) {
 
 static void test_HAL_Delay_edge_10(void **state) {
     (void)state;
-    unsigned int a0 = (unsigned int)0;
-    a0 = a0_vals[9];
-
-    /* Call target function */
-    HAL_Delay(a0);
-
-    /* Test passes if no crash/assertion */
-}
-
-static void test_HAL_Delay_edge_11(void **state) {
-    (void)state;
-    unsigned int a0 = (unsigned int)0;
-    a0 = a0_vals[10];
-
-    /* Call target function */
-    HAL_Delay(a0);
-
-    /* Test passes if no crash/assertion */
-}
-
-static void test_HAL_Delay_edge_12(void **state) {
-    (void)state;
-    unsigned int a0 = (unsigned int)0;
-    a0 = a0_vals[11];
+    unsigned int a0 = (unsigned int)65535;
 
     /* Call target function */
     HAL_Delay(a0);
@@ -155,8 +123,6 @@ int main(void) {
         cmocka_unit_test(test_HAL_Delay_edge_8),
         cmocka_unit_test(test_HAL_Delay_edge_9),
         cmocka_unit_test(test_HAL_Delay_edge_10),
-        cmocka_unit_test(test_HAL_Delay_edge_11),
-        cmocka_unit_test(test_HAL_Delay_edge_12),
     };
     return cmocka_run_group_tests_name("deterministic_edge_HAL_Delay", tests, NULL, NULL);
 }
