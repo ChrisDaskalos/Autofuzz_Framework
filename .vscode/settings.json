@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "stm32f1xx_hal.h": "c",
+        "*.fuzz": "c",
+        "test_common.h": "c",
+        "protocol.h": "c",
+        "stdint.h": "c",
+        "cmocka.h": "c",
+        "string.h": "c",
+        "protocol_defs.h": "c",
+        "servo_defs.h": "c"
+    }
+}

@@ -52,7 +52,7 @@ void Protocol_ProcessCommand(ProtocolContext *ctx, char *command)
         if (strlen(command) == 1 && (command[0]=='B' || command[0]=='b'))
         {
             ctx->cancelRequested = 1;
-            HAL_UART_Transmit(&huart2, (uint8_t*)"CANCELLATION REQUESTED.\r\n", 26, UART_TX_TIMEOUT);
+            HAL_UART_Transmit(&huart2, (uint8_t*)CANCEL_MSG, strlen(CANCEL_MSG), UART_TX_TIMEOUT);
         }
         return;
     }
@@ -116,7 +116,7 @@ void Protocol_ProcessCommand(ProtocolContext *ctx, char *command)
 
         if (!field1 || !field2 || !field3)
         {
-            HAL_UART_Transmit(&huart2, (uint8_t*)"FORMAT ERROR: MUST BE ANGLE,STEP,CHECKSUM\r\n", 43, UART_TX_TIMEOUT);
+            HAL_UART_Transmit(&huart2, (uint8_t*)FORMAT_ERROR_MSG, strlen(FORMAT_ERROR_MSG), UART_TX_TIMEOUT);
             ctx->state = STATE_MENU;
             Protocol_DisplayMenu();
             return;

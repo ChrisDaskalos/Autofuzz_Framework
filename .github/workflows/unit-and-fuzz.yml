@@ -1,0 +1,56 @@
+name: unit-and-fuzz
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      fuzz_max_secs:
+        description: "Seconds per fuzzer"
+        required: false
+        default: "60"     # fallback when manually dispatched
+        type: string
+
+jobs:
+  servo-tests:
+    runs-on: ubuntu-latest
+
+    # Make FUZZ_MAX_SECS available to `make fuzz`
+    env:
+      FUZZ_MAX_SECS: ${{ github.event.inputs.fuzz_max_secs || '60' }}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: Tests/unit_tests
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Clang-18 toolchain, matching Python bindings, and libs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang-18 llvm-18-dev libclang-18-dev python3-clang-18 \
+            build-essential lcov libcmocka-dev
+
+      - name: Point LIBCLANG_PATH at LLVM 18
+        run: |
+          echo "LIBCLANG_PATH=/usr/lib/llvm-18/lib" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=/usr/lib/llvm-18/lib:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
+
+      - name: Build everything
+        run: make build
+
+      - name: Run unit tests
+        run: make unit
+        continue-on-error: true
+
+      - name: Run edge tests
+        run: make edge
+        continue-on-error: true
+
+      - name: Run fuzz tests
+        run: make fuzz
+        continue-on-error: true

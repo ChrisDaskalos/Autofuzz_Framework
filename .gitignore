@@ -1,36 +1,49 @@
-# Build directories (generated output)
+# Build artifacts
 Debug/
-Release/
 build/
-cmake-build-debug/
-
-# Intermediate build files
+*.elf
 *.o
 *.d
-*.lst
-*.map
 *.su
 *.cyclo
-*.axf
-*.elf
+*.map
+*.list
+*.bin
 
-# STM32CubeIDE/Eclipse metadata and configuration files
-.project
-.cproject
+# STM32CubeIDE
 .settings/
+.cproject
+.project
+*.launch
 
-# CubeMX auto-generated files (if not needed)
-*.ioc.user
-*.ioc_
+# Compiled test executables
+Tests/unit_tests/deterministic_edge_*
+Tests/unit_tests/random_fuzz_*
+Tests/unit_tests/test_manual
+!Tests/unit_tests/*.c
 
-# Temporary files, backups, and editor-specific files
-*.log
-*.tmp
-*~
+# Test logs (regenerated each run)
+Tests/unit_tests/logs/
+
+# Evolved fuzzing corpus (regenerated, can be large)
+Tests/unit_tests/lf_corpus/
+
+# Build directories
+Tests/unit_tests/build/
+Tests/unit_tests/_autofuzz.stamp
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
 *.swp
-*.bak
-*.orig
-
-# System-specific files
+*~
 .DS_Store
-Thumbs.db
+
+# Keep these critical files
+!Tests/unit_tests/crashes/
+!Tests/unit_tests/autofuzz/

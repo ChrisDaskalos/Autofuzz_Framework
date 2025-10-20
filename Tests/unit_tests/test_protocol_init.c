@@ -1,3 +1,20 @@
+/**
+ * @file test_protocol_init.c
+ * @brief Unit test for the Protocol_Init function.
+ *
+ * @details
+ * This file provides a CMocka unit test verifying that Protocol_Init correctly
+ * initializes a ProtocolContext structure with all expected default values:
+ *   - authenticated      = 0
+ *   - current_servo_angle = SERVO_DEFAULT_ANGLE
+ *   - state              = STATE_MENU
+ *   - diagnostic_info    = "AWAITING PASSWORD."
+ *   - pendingTargetAngle = 0
+ *   - pendingStep        = 0
+ *   - commandPending     = 0
+ *
+ * Registered and run via cmocka_run_group_tests in main().
+ */
 #include "test_common.h"
 
 static void test_protocol_init(void **state) {

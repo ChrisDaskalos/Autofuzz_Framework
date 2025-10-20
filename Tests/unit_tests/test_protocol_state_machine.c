@@ -1,3 +1,17 @@
+/**
+ * @file test_protocol_state_machine.c
+ * @brief Unit tests for state machine cancellation behavior in the protocol.
+ *
+ * @details
+ * This file contains CMocka-based tests to verify how the protocol's state
+ * machine handles cancellation requests. It checks:
+ *   - Cancellation commands ('B' or 'b') when in STATE_RUNNING.
+ *   - Ignoring cancellation when not in STATE_RUNNING.
+ *   - Handling of whitespace around the cancel command.
+ *   - Rejection of invalid cancel inputs with extra characters.
+ * Tests assert that `cancelRequested` and `state` are correctly updated.
+ */
+
 #include "test_common.h"
 
 /* 

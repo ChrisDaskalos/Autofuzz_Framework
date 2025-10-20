@@ -54,8 +54,6 @@ DMA_HandleTypeDef hdma_usart2_rx;
 DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
-#define UART_BUFFER_SIZE 128  // Enough for "180" + CR + NULL
-char uart_rx_buffer[UART_BUFFER_SIZE];  // Buffer for incoming UART data
 uint8_t rx_index = 0;                  // Current position in the buffer
 volatile uint8_t commandComplete = 0;  // Flag set when a full command is received
 volatile uint8_t current_angle = 90;   // Current servo angle (default 90°)

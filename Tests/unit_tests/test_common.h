@@ -1,60 +1,60 @@
+/*  test_common.h  ─ host-side HAL + protocol/servo “facade” for unit & fuzz */
+
 #ifndef TEST_COMMON_H
 #define TEST_COMMON_H
 
+/* ─── tool‑chain / CMocka ─────────────────────────────────────────────── */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <stddef.h>
-#include <stdarg.h>
-#include <setjmp.h>
-#include <inttypes.h>
-#include <cmocka.h>
 #include <string.h>
+#include <assert.h>
+#include <setjmp.h>     /* must precede <cmocka.h> */
+#include <stdarg.h>
+#include <cmocka.h>
 
-// Minimal STM32/HAL stubs
-typedef struct { void* Instance; } TIM_HandleTypeDef;
-typedef struct { void* Instance; } UART_HandleTypeDef;
-typedef struct { void* Instance; } DMA_HandleTypeDef;
 
-typedef enum {
-    HAL_OK = 0x00U,
-    HAL_ERROR
-} HAL_StatusTypeDef;
+/* ─── production constants we want the tests to use ───────────────────── */
+#include "protocol_defs.h"   /* PROTOCOL_PASSWORD, PROTOCOL_DIAG_SIZE … */
+#include "servo_defs.h"      /* SERVO_MAX_ANGLE, SERVO_DEFAULT_ANGLE … */
+#include "protocol.h"        /* ProtocolState, ProtocolContext, API     */
 
-#define DMA_BUFFER_SIZE      64
-#define TIM_CHANNEL_1        0
-#define UART_TX_TIMEOUT      100
-#define __HAL_TIM_SET_COMPARE(htim, channel, value)  do {} while(0)
+/* ─── minimal STM32 HAL stand‑ins ─────────────────────────────────────── */
+typedef struct { void *Instance; } TIM_HandleTypeDef;
+typedef struct { void *Instance; } UART_HandleTypeDef;
+typedef enum   { HAL_OK = 0, HAL_ERROR } HAL_StatusTypeDef;
 
-static inline HAL_StatusTypeDef HAL_TIM_PWM_Start(TIM_HandleTypeDef *htim, uint32_t Channel) {
-    (void)htim; (void)Channel;
+#define __HAL_TIM_SET_COMPARE(htim,ch,val)   ((void)0)
+
+static inline HAL_StatusTypeDef HAL_TIM_PWM_Start(TIM_HandleTypeDef *h, uint32_t c)
+{ (void)h; (void)c; return HAL_OK; }
+
+/* Declare UART transmit; real body is in test_common.c (with assert) */
+static inline HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *h, uint8_t *p, uint16_t n, uint32_t t)
+{
+    (void)h; (void)t;
+    if (!p) return HAL_OK;
+    /* Bounded length check to avoid over-reads under tests */
+    size_t actual = strnlen((const char*)p, 4096);
+    assert(n <= actual && "HAL_UART_Transmit length exceeds string size");
     return HAL_OK;
 }
 
-static inline HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *huart,
-                                                  uint8_t *pData,
-                                                  uint16_t Size,
-                                                  uint32_t Timeout) {
-    (void)huart; (void)pData; (void)Size; (void)Timeout;
-    return HAL_OK;
-}
 
-static inline void HAL_Delay(uint32_t ms) {
-    (void)ms;
-}
+void HAL_Delay(uint32_t ms);  /* implemented in test_common.c */
 
-// Fake the global variables your code references
-/* Declare these global variables as 'extern'. */
+/* ─── globals firmware expects ────────────────────────────────────────── */
 extern TIM_HandleTypeDef htim2;
 extern UART_HandleTypeDef huart2;
-extern DMA_HandleTypeDef hdma_usart2_rx;
-extern DMA_HandleTypeDef hdma_usart2_tx;
-extern uint8_t dmaBuffer[DMA_BUFFER_SIZE];
 
-// Finally include protocol/servo headers (now skipping main.h under UNIT_TEST)
-#include "servo.h"
-#include "protocol.h"
-#include "protocol_defs.h"
-#include "servo_defs.h"
+/* ─── public helpers exposed to unit‑tests & fuzzers ──────────────────── */
+//static int  ascii_to_int(const char *s, int *out);
+void reset_ctx(ProtocolContext *ctx);
 
-#endif // TEST_COMMON_H
+/* Servo façade so host tests can link */
+void Servo_SetAngle(uint8_t angle);
+// void Servo_Ramp(uint8_t *cur, uint8_t tgt, uint8_t step);
+void Servo_Init(void);
+uint8_t Servo_Ramp_safe(uint8_t cur, uint8_t tgt, uint8_t step);
+
+#endif /* TEST_COMMON_H */
