@@ -9,7 +9,7 @@
 AutoFuzz analyzes your C code and automatically generates:
 1. **Edge tests** - Boundary values (INT_MAX, INT_MIN, buffer limits)
 2. **Fuzz harnesses** - LibFuzzer tests for random input exploration
-3. Runs **200M+ test cases in 3 minutes**
+3. Runs **Millions of test cases**
 
 **Result:** Found exploitable buffer overflow and undefined behavior that manual testing missed.
 
