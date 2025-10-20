@@ -11,8 +11,6 @@ AutoFuzz analyzes your C code and automatically generates:
 2. **Fuzz harnesses** - LibFuzzer tests for random input exploration
 3. Runs **Millions of test cases**
 
-**Result:** Found exploitable buffer overflow and undefined behavior that manual testing missed.
-
 ---
 
 ## Quick Start
@@ -125,7 +123,7 @@ make fuzz          # Just fuzzing
 
 ## What to Edit: File-by-File Guide
 
-### 📝 `autofuzz/config.py` - **YOU MUST EDIT THIS**
+###  `autofuzz/config.py` - **YOU MUST EDIT THIS**
 
 **Purpose:** Define domain-specific test values
 
@@ -165,7 +163,7 @@ STRING_SEEDS = [
 
 ---
 
-### 📝 `Makefile` - **EDIT PATHS ONLY**
+###  `Makefile` - **EDIT PATHS ONLY**
 
 **What to change:**
 ```makefile
@@ -185,7 +183,7 @@ FUZZ_MAX_SECS ?= 60               # Seconds per function
 
 ---
 
-### 📝 `test_common.c/h` - **YOUR TEST UTILITIES**
+###  `test_common.c/h` - **YOUR TEST UTILITIES**
 
 **Purpose:** Mocks, stubs, helper functions
 
@@ -203,7 +201,7 @@ void reset_system_state(void) {
 
 ---
 
-### 📝 Manual Unit Tests (Optional)
+###  Manual Unit Tests (Optional)
 
 Create `test_myfeature.c` for business logic tests:
 ```c
@@ -449,23 +447,6 @@ ServoProject/
     └── autofuzz.yml              # CI/CD configuration
 ```
 
----
-
-## What You Get
-
-### Before AutoFuzz
-- Manual unit tests only
-- 20-30 test cases
-- No fuzzing
-- Bugs slip through to production
-
-### After AutoFuzz
-- Automated test generation
-- 200M+ test cases in 3 minutes
-- Found 2 critical security bugs
-- Runs on every commit (CI/CD)
-
----
 
 ## License
 
@@ -479,8 +460,6 @@ MIT License
 2. **Edit `config.py`** - Add your buffer sizes and protocol commands
 3. **Edit `Makefile`** - Point to your source files
 4. Run `make test`
-
-**That's it.** AutoFuzz generates and runs tests automatically.
 
 ---
 
