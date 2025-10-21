@@ -19,9 +19,6 @@ AutoFuzz analyzes your C code and automatically generates:
 ```bash
 # Ubuntu/Debian
 sudo apt-get install build-essential clang libfuzzer-12-dev libcmocka-dev python3
-
-# macOS
-brew install llvm cmocka python3
 ```
 
 ### Run Tests
@@ -155,9 +152,9 @@ EDGE_CAP = 12                  # How many edge values per parameter
 **Example from this project:**
 ```python
 STRING_SEEDS = [
-    '"UNLOCK"',                 # Authentication password
+    '"UNLOCK"',                # Authentication password
     '"(90,5,95)"',             # Valid servo command
-    '"' + 'A' * 1024 + '"',    # DMA_BUFFER_SIZE ← Found the bug!
+    '"' + 'A' * 1024 + '"',    # DMA_BUFFER_SIZE
 ]
 ```
 
@@ -398,10 +395,6 @@ SUMMARY: AddressSanitizer: stack-buffer-overflow
 ```bash
 # Ubuntu
 sudo apt-get install libfuzzer-12-dev
-
-# macOS
-brew install llvm
-export PATH="/usr/local/opt/llvm/bin:$PATH"
 ```
 
 ### Tests run but find nothing
@@ -429,12 +422,12 @@ ServoProject/
 │   ├── autofuzz/                 # Core framework
 │   │   ├── scanner.py            # Extract function signatures
 │   │   ├── generator.py          # Generate test code
-│   │   ├── config.py             # ← EDIT: Your test values
+│   │   ├── config.py             # EDIT: Your test values
 │   │   ├── main.py               # Orchestration
 │   │   └── autofuzz_rt.h         # Runtime helpers
 │   │
-│   ├── Makefile                  # ← EDIT: Paths to your code
-│   ├── test_common.c/h           # ← EDIT: Your mocks/stubs
+│   ├── Makefile                  # EDIT: Paths to your code
+│   ├── test_common.c/h           # EDIT: Your mocks/stubs
 │   │
 │   ├── test_*.c                  # Manual unit tests (optional)
 │   ├── deterministic_edge_*.c    # Auto-generated (don't edit)
@@ -444,23 +437,5 @@ ServoProject/
 │   └── lf_corpus/                # Evolved test corpus (ignore)
 │
 └── .github/workflows/
-    └── autofuzz.yml              # CI/CD configuration
+    └── autofuzz.yml              # Minimal CI config
 ```
-
-
-## License
-
-MIT License
-
----
-
-## Summary: 3 Steps to Get Started
-
-1. **Copy `autofuzz/` to your project**
-2. **Edit `config.py`** - Add your buffer sizes and protocol commands
-3. **Edit `Makefile`** - Point to your source files
-4. Run `make test`
-
----
-
-**Questions?** Open an issue or check the generated test code to understand what's being tested.
