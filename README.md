@@ -1,6 +1,6 @@
 # AutoFuzz: Automated Testing for Embedded C
 
-**Multi-layer testing framework** that generates unit tests, edge-case tests, and fuzz harnesses automatically. Found 2 critical security bugs (buffer overflow + integer overflow) in STM32 firmware.
+**Multi-layer testing framework** that generates unit tests, edge-case tests, and fuzz harnesses automatically (Use case motor drive through UART developed in STM32 eco-system).
 
 ---
 
