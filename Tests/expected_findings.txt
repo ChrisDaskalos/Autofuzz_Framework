@@ -1,4 +1,4 @@
-# Findings that `make test` expects today (see README.md, "Expected results").
+# Findings that `make test` expects today (see docs/FINDINGS.md).
 #
 # Format:  <stage>  <program>  <finding>
 #   stage    unit | edge | fuzz | manual

@@ -200,7 +200,7 @@ fuzz:
 
 # Run everything. Every stage runs even if an earlier one fails, then a
 # summary is printed. Today all three stages report findings on purpose
-# (see "Expected results" in the top-level README.md), so this exits 1.
+# (see docs/FINDINGS.md), so this exits 1.
 test: build
 > @u=PASS; e=PASS; f=PASS; \
 > $(MAKE) --no-print-directory unit || u=FAIL; \
@@ -212,7 +212,7 @@ test: build
 > echo "  edge : $$e"; \
 > echo "  fuzz : $$f"; \
 > echo "  Known findings make all three FAIL today."; \
-> echo "  See 'Expected results' in README.md before you worry."; \
+> echo "  See docs/FINDINGS.md before you worry."; \
 > echo "============================================================"; \
 > [ "$$u$$e$$f" = "PASSPASSPASS" ]
 

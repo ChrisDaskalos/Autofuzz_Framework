@@ -8,7 +8,7 @@
 ##   make clean   remove everything that build/test/fuzz created
 ##
 ## This Makefile is only for the PC tests. The STM32 firmware itself is
-## built in STM32CubeIDE (see README.md).
+## built in STM32CubeIDE (see docs/ARCHITECTURE.md).
 .RECIPEPREFIX := >
 
 UNIT   := Tests/legacy_thesis
