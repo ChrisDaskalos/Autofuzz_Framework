@@ -45,5 +45,7 @@ A 10-second run already reports these, so `make fuzz` exits with an error:
 
 - `fuzz_uart_dma.c` tries to set `DMA_BUFFER_SIZE` to 64, but
   `protocol_defs.h` sets it back to 1024, so the harness really uses 1024.
-- The two `crash-*` files that were on the Desktop were not added: they came
-  from an older harness version and no longer crash anything.
+- The two `crash-*` files that were on the Desktop were not added. They are
+  1-byte inputs, and they were most likely caused by a deliberate
+  `memcpy(bad, "X", 2)` in `fuzz_protocol_cmd.c` (a bug in the harness, not
+  the firmware). That line is removed; see the git log.

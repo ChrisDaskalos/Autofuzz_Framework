@@ -105,12 +105,11 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
         return 0;
     }
 
-    /* 5) no move queued → force a tiny overflow to get ASan to show
-          the `Protocol_ProcessCommand` call in protocol.c too. */
-    {
-        char bad[1] = { 0 };
-        memcpy(bad, "X", 2);
-    }
-
+    /* 5) no move queued: nothing more to do.
+     *    (A deliberate memcpy(bad, "X", 2) into a 1-byte buffer used to be
+     *    here. It made every such input "crash" in the harness itself, not
+     *    in the firmware, whenever the compiler did not optimise it away,
+     *    e.g. at -O0. Removed so that every finding comes from the
+     *    firmware.) */
     return 0;
 }
