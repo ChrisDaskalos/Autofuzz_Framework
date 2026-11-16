@@ -39,12 +39,14 @@ A 10-second run already reports these, so `make fuzz` exits with an error:
 |---|---|---|
 | Signed integer overflow in `ComputeChecksumFromNumbers` (`angle + step` with large numbers) | `Core/Src/protocol.c:159` | session, cmd |
 | Buffer overflow: `memcpy` uses the DMA length without checking it | `fuzz_uart_dma.c` (`ProcessUartData`, copied from `main.c`) | uart_dma |
-| Unsigned wrap-around: `DMA_BUFFER_SIZE - remain` when `remain` is bigger than the buffer | `fuzz_uart_dma.c:87` (same code in `main.c`) | uart_dma |
+| Unsigned wrap-around: `DMA_BUFFER_SIZE - remain` when `remain` is bigger than the buffer | `fuzz_uart_dma.c:88` (same code in `main.c`) | uart_dma |
 
 ## Known limitations
 
-- `fuzz_uart_dma.c` tries to set `DMA_BUFFER_SIZE` to 64, but
-  `protocol_defs.h` sets it back to 1024, so the harness really uses 1024.
+- `fuzz_uart_dma.c` uses the firmware's `DMA_BUFFER_SIZE` (1024). With
+  `-max_len=128` the payload is at most 124 bytes; the rest of the buffer
+  stays zero. The DMA bug does not need a full buffer: it is triggered by
+  the fake "bytes remaining" counter.
 - The two `crash-*` files that were on the Desktop were not added. They are
   1-byte inputs, and they were most likely caused by a deliberate
   `memcpy(bad, "X", 2)` in `fuzz_protocol_cmd.c` (a bug in the harness, not

@@ -4,7 +4,8 @@
  *
  * @details
  * This harness drives the firmware’s UART-DMA path under libFuzzer, exercising:
- *   1. A fixed DMA buffer size of 64 bytes for input.
+ *   1. The firmware's own DMA buffer size (DMA_BUFFER_SIZE from
+ *      protocol_defs.h, 1024 bytes), the same as Core/Src/main.c.
  *   2. The real protocol and servo interfaces (Protocol_ProcessCommand,
  *      Servo_Ramp, Servo_SetAngle).
  *   3. Global protocol context and DMA/UART handle definitions matching
@@ -30,10 +31,10 @@
 #include <string.h>
 
 // -----------------------------------------------------------------------------
-// 1) Force DMA_BUFFER_SIZE to 64 for this harness only
+// 1) DMA_BUFFER_SIZE comes from protocol_defs.h (1024), like in the firmware.
+//    (This used to #define it to 64 before the includes, but protocol_defs.h
+//    redefined it to 1024, so 64 was never used.)
 // -----------------------------------------------------------------------------
-#undef DMA_BUFFER_SIZE
-#define DMA_BUFFER_SIZE 64
 
 // -----------------------------------------------------------------------------
 // 2) Pull in the real firmware interfaces
