@@ -1,4 +1,4 @@
-## Makefile — targets: build | unit | edge | fuzz | clean
+## Makefile — targets: build | unit | edge | fuzz | test | clean
 .RECIPEPREFIX := >
 
 CC      := clang
@@ -38,7 +38,7 @@ MANUAL_TEST_BIN := $(MANUAL_TESTS:%.c=%.elf)
 
 export STUB_SRCS := $(STUB_SRC)
 
-.PHONY: build unit edge fuzz clean help
+.PHONY: build unit edge fuzz test clean help
 .DELETE_ON_ERROR:
 
 # Default target
@@ -50,11 +50,12 @@ help:
 > @echo "  unit       - Run manual test_*.c unit tests"
 > @echo "  edge       - Run deterministic edge case tests"
 > @echo "  fuzz       - Run random fuzzing tests"
+> @echo "  test       - build, then unit + edge + fuzz, with a summary"
 > @echo "  clean      - Remove all build artifacts"
 > @echo ""
 > @echo "Variables:"
 > @echo "  FUZZ_MAX_SECS - Fuzzing time per target (default: 10)"
-> @echo "  CC            - Compiler for edge/unit tests (default: cc)"
+> @echo "  CC            - Compiler for edge/unit tests (default: clang)"
 > @echo "  FUZZ_CC       - Compiler for fuzzers (default: clang)"
 
 # Generate autofuzz harnesses
@@ -196,6 +197,24 @@ fuzz:
 >   echo ">>> Some fuzzers found issues!"; \
 > fi; \
 > exit $$rc
+
+# Run everything. Every stage runs even if an earlier one fails, then a
+# summary is printed. Today all three stages report findings on purpose
+# (see "Expected results" in the top-level README.md), so this exits 1.
+test: build
+> @u=PASS; e=PASS; f=PASS; \
+> $(MAKE) --no-print-directory unit || u=FAIL; \
+> $(MAKE) --no-print-directory edge || e=FAIL; \
+> $(MAKE) --no-print-directory fuzz || f=FAIL; \
+> echo ""; \
+> echo "================ SUMMARY (Tests/unit_tests) ================"; \
+> echo "  unit : $$u"; \
+> echo "  edge : $$e"; \
+> echo "  fuzz : $$f"; \
+> echo "  Known findings make all three FAIL today."; \
+> echo "  See 'Expected results' in README.md before you worry."; \
+> echo "============================================================"; \
+> [ "$$u$$e$$f" = "PASSPASSPASS" ]
 
 # Clean build artifacts
 clean:
