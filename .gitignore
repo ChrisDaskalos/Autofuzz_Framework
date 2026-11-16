@@ -71,4 +71,3 @@ crash-*
 leak-*
 timeout-*
 oom-*
-!Tests/fuzz_manual/crashes/crash-*
