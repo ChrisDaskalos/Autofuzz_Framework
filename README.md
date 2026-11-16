@@ -95,8 +95,16 @@ delete its line from the list. The full logs are in `Tests/results/`.
 | # | Bug | Where | Found by |
 |---|---|---|---|
 | 1 | **Stack buffer overflow.** A command with 1024 or more characters and no line end fills the 1024-byte buffer with no `\0` at the end. Then `strtok`/`strrchr` read past the end of the buffer. | `Protocol_ProcessCommand` in `Tests/unit_tests/test_common.c` | `deterministic_edge_Protocol_ProcessCommand` |
-| 2 | **Signed integer overflow** in the checksum: `angle + step` with large numbers (for example `INT_MAX + 1`) is undefined behaviour in C. | `ComputeChecksumFromNumbers`: `Tests/unit_tests/test_common.c:162` and real firmware `Core/Src/protocol.c:159` | edge test, `random_fuzz_ComputeChecksumFromNumbers` (crashes in < 1 s), `test_manual_overflow`, `Tests/fuzz_manual` |
-| 3 | **DMA length not checked.** If the DMA counter says more bytes than the buffer holds, `memcpy` copies past the buffer, and `DMA_BUFFER_SIZE - remain` wraps around. | `HAL_UART_IdleCallback` / `ProcessUartData` (copy of `Core/Src/main.c`) | `Tests/fuzz_manual` `fuzz_uart_dma` |
+| 2 | **Signed integer overflow** in the checksum: `angle + step` with large numbers is undefined behaviour in C. Example input: password `1234`, menu `1`, then `2147483647,1,0`. In practice the sum wraps to a number whose low byte is 0, so checksum `0` is accepted and the command is queued (target clamped to 165). | `ComputeChecksumFromNumbers`: `Tests/unit_tests/test_common.c:162` and real firmware `Core/Src/protocol.c:159` | edge test, `random_fuzz_ComputeChecksumFromNumbers` (crashes in < 1 s), `test_manual_overflow`, `Tests/fuzz_manual` |
+
+**Not a bug: DMA length.** Earlier versions of `fuzz_uart_dma` reported a
+`memcpy` overflow and a wrap-around in `DMA_BUFFER_SIZE - remain`. The
+harness gave the DMA counter any 32-bit value, but on the STM32F103 the
+counter starts at the buffer size (1024) and only counts down, so the
+firmware can only read 0 to 1024. With realistic values there is no
+finding, so this was a false finding of the harness, now fixed. (A check
+`if (remain > DMA_BUFFER_SIZE)` in `main.c` would still be good defensive
+code.)
 
 ### Unit tests that fail (and why)
 

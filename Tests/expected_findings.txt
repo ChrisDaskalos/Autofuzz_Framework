@@ -35,7 +35,5 @@ maybe fuzz random_fuzz_Protocol_ProcessCommand      ASAN stack-buffer-overflow .
 manual  fuzz_protocol_session   UBSAN undefined-behavior protocol\.c:159
 manual  fuzz_protocol_cmd       UBSAN undefined-behavior protocol\.c:159
 
-# --- Bug 3: DMA length not checked (copy of Core/Src/main.c)
-# The ASan kind for this memcpy depends on the clang version.
-manual  fuzz_uart_dma           UBSAN undefined-behavior fuzz_uart_dma\.c:88
-manual  fuzz_uart_dma           ASAN (global-buffer-overflow|unknown-crash) .*
+# fuzz_uart_dma: no findings expected (the old DMA findings were caused by
+# impossible DMA counter values in the harness; fixed).

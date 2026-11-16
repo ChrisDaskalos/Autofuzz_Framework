@@ -121,6 +121,12 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
     // Extract a fake DMA counter (4 bytes)
     uint32_t fakeRemaining;
     memcpy(&fakeRemaining, Data, sizeof(fakeRemaining));
+    /* On the STM32F103 the DMA counter (CNDTR) starts at the buffer size
+     * given to HAL_UART_Receive_DMA (DMA_BUFFER_SIZE) and only counts down,
+     * so the firmware can only read 0..DMA_BUFFER_SIZE. Larger values made
+     * `DMA_BUFFER_SIZE - remain` wrap and memcpy overflow: a finding that
+     * cannot happen on the real board (a false finding of this harness). */
+    fakeRemaining %= (uint32_t)DMA_BUFFER_SIZE + 1u;
 
     // Copy payload into dmaBuffer
     size_t payload = Size - sizeof(fakeRemaining);
