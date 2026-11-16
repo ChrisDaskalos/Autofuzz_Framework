@@ -1,487 +1,199 @@
-# AutoFuzz: Automated Testing for Embedded C
+# AutoFuzz: automatic edge tests and fuzzing for STM32 servo firmware
 
-**Multi-layer testing framework** that generates unit tests, edge-case tests, and fuzz harnesses automatically. Found 2 critical security bugs (buffer overflow + integer overflow) in STM32 firmware.
+AutoFuzz is the tool from my MSc thesis. It reads C code with **libclang**,
+finds the functions, and writes two kinds of tests for each function:
+
+1. **Edge tests** (`deterministic_edge_*.c`): CMocka tests that call the
+   function with boundary values (`INT_MIN`, `INT_MAX`, empty string,
+   strings longer than the 1024-byte DMA buffer, ...).
+2. **Fuzz harnesses** (`random_fuzz_*.c`): libFuzzer programs that call the
+   function with random inputs.
+
+Everything is compiled with AddressSanitizer and UndefinedBehaviorSanitizer,
+so memory errors and integer overflows are reported with a file and line.
+
+The example target is firmware for an STM32F103 that moves a servo motor
+using commands it receives over UART.
 
 ---
 
-## What It Does
+## Quick start
 
-AutoFuzz analyzes your C code and automatically generates:
-1. **Edge tests** - Boundary values (INT_MAX, INT_MIN, buffer limits)
-2. **Fuzz harnesses** - LibFuzzer tests for random input exploration
-3. Runs **200M+ test cases in 3 minutes**
+You need either **Docker**, or **Linux with clang, CMocka and Python 3**.
 
-**Result:** Found exploitable buffer overflow and undefined behavior that manual testing missed.
+### With Docker (easiest)
 
----
-
-## Quick Start
-
-### Prerequisites
 ```bash
-# Ubuntu/Debian
-sudo apt-get install build-essential clang libfuzzer-12-dev libcmocka-dev python3
-
-# macOS
-brew install llvm cmocka python3
+docker build -t autofuzz .     # installs everything and compiles (one time)
+docker run --rm autofuzz       # runs `make test` (about 3 minutes)
 ```
 
-### Run Tests
+Longer fuzzing: `docker run --rm autofuzz make fuzz FUZZ_MAX_SECS=300`
+
+### Without Docker (Ubuntu 24.04)
+
 ```bash
-cd Tests/unit_tests
-make test          # Run everything (~3 min)
-make unit          # Manual unit tests only
-make edge          # Auto-generated edge tests
-make fuzz          # Fuzzing (60s per function)
+sudo apt install clang-18 libclang-rt-18-dev build-essential libcmocka-dev python3-venv
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+
+make deps      # checks that everything is installed
+make build     # generates the harnesses and compiles all tests
+make test      # runs all tests and prints a summary
 ```
+
+If `clang` is not found, either install the `clang` package or use
+`sudo ln -s /usr/bin/clang-18 /usr/local/bin/clang`.
 
 ---
 
-## How To Integrate AutoFuzz Into Your Project
+## Commands
 
-### Step 1: Copy the Framework
-```bash
-your_project/
-├── tests/                         # Create this
-│   ├── autofuzz/                 # Copy from Tests/unit_tests/autofuzz/
-│   │   ├── scanner.py
-│   │   ├── generator.py
-│   │   ├── config.py             # ← YOU EDIT THIS
-│   │   ├── main.py
-│   │   └── autofuzz_rt.h
-│   ├── Makefile                  # Copy and modify
-│   └── test_common.c/h           # Your test utilities
-```
+Run these from the repository root.
 
-### Step 2: Configure for Your Domain
+| Command | What it does | Time |
+|---|---|---|
+| `make deps` | Checks clang, libFuzzer, CMocka, Python libclang. Tells you what is missing. | 1 s |
+| `make build` | Runs AutoFuzz (writes the harnesses), then compiles all tests and fuzzers. | ~30 s |
+| `make test` | Unit tests + edge tests + 10 s per fuzzer, then a summary. | ~3 min |
+| `make fuzz` | Every fuzzer for `FUZZ_MAX_SECS` seconds (default 60). | ~13 min |
+| `make clean` | Deletes everything that the commands above created. | 1 s |
 
-Edit `autofuzz/config.py` with your system's critical values:
-```python
-# File: autofuzz/config.py
-
-# CRITICAL: Add your buffer sizes
-STRING_SEEDS = [
-    # Your protocol commands
-    '"START"',
-    '"STOP"',
-    '"STATUS"',
-    
-    # Your buffer boundaries (MOST IMPORTANT!)
-    '"' + 'A' * 255 + '"',   # UART_BUFFER_SIZE - 1
-    '"' + 'A' * 256 + '"',   # Exactly UART_BUFFER_SIZE ← Test this!
-    '"' + 'A' * 257 + '"',   # One over
-    '"' + 'A' * 1024 + '"',  # DMA_BUFFER_SIZE
-    
-    # Edge cases
-    '""',                     # Empty
-    '"\\x00"',               # Null byte
-    '"\\r\\n"',              # CRLF
-]
-
-# Add your system's constants
-GENERIC_EDGES = {
-    "char *": STRING_SEEDS,
-    "int": mk_int_edges(32, True),
-    # ... other types
-}
-```
-
-**Key Point:** The buffer overflow was found because we tested at **exactly 1024 bytes** (the actual buffer size). Generic values like 100 bytes missed it.
-
-### Step 3: Point to Your Code
-
-Edit the `Makefile`:
-```makefile
-# Point to your source files
-SRC_DIR = ../../src                    # Your source code
-INCLUDES = -I$(SRC_DIR)/include        # Your headers
-
-# List your source files to test
-SRCS = $(SRC_DIR)/protocol.c \
-       $(SRC_DIR)/parser.c \
-       $(SRC_DIR)/utils.c
-
-# Build object files
-TEST_COMMON_OBJ = build/test_common.o $(SRCS:.c=.o)
-```
-
-### Step 4: Generate Tests
-```bash
-make build         # Triggers autofuzz code generation
-```
-
-This creates:
-- `deterministic_edge_*.c` - Tests with boundary values
-- `random_fuzz_*.c` - LibFuzzer harnesses
-
-### Step 5: Run Tests
-```bash
-make test          # Everything
-make edge          # Just edge tests
-make fuzz          # Just fuzzing
-```
+Change the times: `make fuzz FUZZ_MAX_SECS=600`, `make test TEST_FUZZ_SECS=30`.
 
 ---
 
-## What to Edit: File-by-File Guide
+## Expected results
 
-### 📝 `autofuzz/config.py` - **YOU MUST EDIT THIS**
+**Today `make test` ends with an error. This is correct:** the tests find
+known bugs, and these bugs are the results of the thesis. The summary at
+the end shows what was found and what was expected:
 
-**Purpose:** Define domain-specific test values
-
-**What to change:**
-```python
-# 1. Add your protocol commands
-STRING_SEEDS = [
-    '"YOUR_COMMAND_1"',
-    '"YOUR_COMMAND_2"',
-]
-
-# 2. Add your buffer sizes (CRITICAL!)
-# Look for #define BUFFER_SIZE in your code
-STRING_SEEDS += [
-    '"' + 'A' * YOUR_BUFFER_SIZE + '"',      # Exact size
-    '"' + 'A' * (YOUR_BUFFER_SIZE-1) + '"',  # One less
-    '"' + 'A' * (YOUR_BUFFER_SIZE+1) + '"',  # One more
-]
-
-# 3. Add your numeric ranges
-# If you have angle limits 0-180:
-INT_EDGES = [-1, 0, 1, 179, 180, 181, 255]
-
-# 4. Adjust fuzzing parameters
-FZ_MAX_LEN = 4096              # Max input size for fuzzer
-EDGE_CAP = 12                  # How many edge values per parameter
+```
+========================= SUMMARY =========================
+  unit tests (hand-written)      : FAIL   expected: FAIL
+  edge tests (AutoFuzz)          : FAIL   expected: FAIL
+  fuzz (AutoFuzz harnesses)      : FAIL   expected: FAIL
+  fuzz (Tests/fuzz_manual)       : FAIL   expected: FAIL
 ```
 
-**Example from this project:**
-```python
-STRING_SEEDS = [
-    '"UNLOCK"',                 # Authentication password
-    '"(90,5,95)"',             # Valid servo command
-    '"' + 'A' * 1024 + '"',    # DMA_BUFFER_SIZE ← Found the bug!
-]
-```
+If a line says `PASS`, a known bug has gone away. Then update this section.
+
+### Bugs found (thesis results)
+
+| # | Bug | Where | Found by |
+|---|---|---|---|
+| 1 | **Stack buffer overflow.** A command with 1024 or more characters and no line end fills the 1024-byte buffer with no `\0` at the end. Then `strtok`/`strrchr` read past the end of the buffer. | `Protocol_ProcessCommand` in `Tests/unit_tests/test_common.c` | `deterministic_edge_Protocol_ProcessCommand` |
+| 2 | **Signed integer overflow** in the checksum: `angle + step` with large numbers (for example `INT_MAX + 1`) is undefined behaviour in C. | `ComputeChecksumFromNumbers`: `Tests/unit_tests/test_common.c:162` and real firmware `Core/Src/protocol.c:159` | edge test, `random_fuzz_ComputeChecksumFromNumbers` (crashes in < 1 s), `test_manual_overflow`, `Tests/fuzz_manual` |
+| 3 | **DMA length not checked.** If the DMA counter says more bytes than the buffer holds, `memcpy` copies past the buffer, and `DMA_BUFFER_SIZE - remain` wraps around. | `HAL_UART_IdleCallback` / `ProcessUartData` (copy of `Core/Src/main.c`) | `Tests/fuzz_manual` `fuzz_uart_dma` |
+
+### Unit tests that fail (and why)
+
+The hand-written unit tests in `Tests/unit_tests/test_*.c` describe how the
+protocol **should** behave. Four of them fail because the code does
+something else. The real firmware (`Core/Src/protocol.c`) behaves the same
+way as the test copy.
+
+| Test | Input | Test expects | Code does |
+|---|---|---|---|
+| `test_state_machine_cancellation_with_whitespace` | `"   B   "` while the servo moves | cancel | Ignores it. Only exactly `B` or `b` cancels; spaces are not removed. |
+| `test_servo_command_extra_fields` | `90,5,95,100` | reject | Accepts it. Only the first 3 fields are read; the 4th is ignored. |
+| `test_servo_command_zero_step` | `90,0,90` | reject | Accepts it. There is no check for step = 0. On the real board `Servo_Ramp` then hits `assert(step != 0 ...)` and the firmware stops. |
+| `test_servo_command_negative_step` | `90,-5,85` | reject | Accepts it. `-5` becomes `251` (stored as `uint8_t`) and the checksum still matches. On the real board this also hits the `assert` in `Servo_Ramp`. |
+
+`test_manual_overflow` also "fails" on purpose: it is a small demo of bug 2.
 
 ---
 
-### 📝 `Makefile` - **EDIT PATHS ONLY**
+## Folder map
 
-**What to change:**
-```makefile
-# Line ~10: Point to your source code
-SRC_DIR = ../../Core/Src          # Change this
-INCLUDES = -I../../Core/Inc       # Change this
+```
+Core/, Drivers/              STM32 firmware (CubeMX project, HAL library)
+ServoProject.ioc             CubeMX project file
+Makefile                     the commands above (PC tests only)
+Dockerfile                   Ubuntu 24.04 + clang 18 test environment
+requirements.txt             Python package for AutoFuzz (libclang)
 
-# Line ~20: List files to test
-SRCS = $(SRC_DIR)/protocol.c \
-       $(SRC_DIR)/myfile.c        # Add your files
+Tests/unit_tests/            AutoFuzz + tests on a PC copy of the logic
+  autofuzz/                  the AutoFuzz tool (Python)
+    main.py                  entry point: parse, find functions, write files
+    scanner.py               finds functions and edge values with libclang
+    generator.py             writes deterministic_edge_*.c and random_fuzz_*.c
+    config.py                edge values and string seeds  <- edit for your project
+  test_common.c/.h           PC copy of the protocol + servo logic, fake HAL
+  test_*.c                   hand-written CMocka unit tests
+  Makefile                   build | unit | edge | fuzz | test | clean
 
-# Line ~100: Optional - adjust fuzzing time
-FUZZ_MAX_SECS ?= 60               # Seconds per function
+Tests/fuzz_manual/           hand-written libFuzzer harnesses that link the
+                             REAL firmware (Core/Src/protocol.c, servo.c)
+                             -> see Tests/fuzz_manual/README.md
 ```
 
-**Don't change:** Compiler flags, sanitizer settings, test targets
+Files created by `make` (generated harnesses, binaries, `build/`, `logs/`,
+`crashes/`, `lf_corpus/`, `out/`) are not in git. `make build` recreates them.
 
 ---
 
-### 📝 `test_common.c/h` - **YOUR TEST UTILITIES**
+## How AutoFuzz works
 
-**Purpose:** Mocks, stubs, helper functions
+1. `make build` runs `python3 -m autofuzz.main` in `Tests/unit_tests`.
+2. **scanner.py** parses `test_common.c` with libclang. It takes every
+   non-static function that has parameters, and collects edge values for
+   each parameter: values from `config.py` for the type, plus numbers and
+   strings it finds in comparisons, `switch` cases and literals.
+3. **generator.py** sorts the values and keeps at most `EDGE_CAP` (12) per
+   parameter, spread from smallest to largest. It writes:
+   - `deterministic_edge_<function>.c`: one CMocka test per value combination
+   - `random_fuzz_<function>.c`: a libFuzzer harness
+4. The Makefile compiles them with `-fsanitize=address,undefined`
+   (and `integer` for fuzzing) and runs them.
 
-**Example:**
-```c
-// test_common.c
-void mock_HAL_UART_Transmit(char *data, size_t len) {
-    // Mock UART for testing
-}
+The generated files are the same on every run.
 
-void reset_system_state(void) {
-    // Reset global state between tests
-}
-```
+### Important: what is tested
 
----
+AutoFuzz tests `Tests/unit_tests/test_common.c`. This is a **PC copy** of
+the firmware logic, not the firmware file `Core/Src/protocol.c` itself
+(the Makefile variable `PROD_SRCS` is empty). The copy behaves like the
+firmware, but the code is not identical. Bug 2 is also found in the real
+firmware by `Tests/fuzz_manual`.
 
-### 📝 Manual Unit Tests (Optional)
+`Tests/unit_tests` also has its own copies of `protocol_defs.h` and
+`servo_defs.h`. They are slightly different from `Core/Inc`
+(for example `SERVO_MIN_PULSE`/`SERVO_MAX_PULSE`).
 
-Create `test_myfeature.c` for business logic tests:
-```c
-#include <cmocka.h>
-#include "test_common.h"
-
-static void test_authentication(void **state) {
-    assert_true(authenticate("valid_password"));
-    assert_false(authenticate("wrong_password"));
-}
-
-int main(void) {
-    const struct CMUnitTest tests[] = {
-        cmocka_unit_test(test_authentication),
-    };
-    return cmocka_run_group_tests(tests, NULL, NULL);
-}
-```
-
-Add to Makefile:
-```makefile
-MANUAL_TESTS += test_myfeature.elf
-```
+Planned next step: run AutoFuzz directly on `Core/Src`.
 
 ---
 
-## CI/CD Integration
+## Use AutoFuzz on your own code
 
-### GitHub Actions
+1. Copy `Tests/unit_tests/autofuzz/`, `Makefile` and a `test_common.c/.h`
+   that contains (or includes) the functions you want to test.
+2. Edit `autofuzz/config.py`: add your commands and, most importantly, your
+   **buffer sizes** (size − 1, size, size + 1). Bug 1 was found because
+   strings longer than the 1024-byte buffer were in the seed list.
+3. Run `make build` and `make test`.
 
-Create `.github/workflows/autofuzz.yml`:
-```yaml
-name: AutoFuzz Tests
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang libfuzzer-12-dev libcmocka-dev python3
-    
-    - name: Run AutoFuzz Tests
-      run: |
-        cd Tests/unit_tests
-        make test
-      timeout-minutes: 5
-    
-    - name: Upload Crash Reports
-      if: failure()
-      uses: actions/upload-artifact@v3
-      with:
-        name: crashes
-        path: Tests/unit_tests/crashes/
-```
-
-**What this does:**
-1. **Triggers:** Runs on every push/PR
-2. **Install:** Sets up clang, fuzzer, test framework
-3. **Test:** Runs all tests (unit + edge + fuzz)
-4. **Timeout:** Fails if tests hang (5 min limit)
-5. **Upload crashes:** Saves crash files if bugs found
-
-**Customize:**
-```yaml
-# Run longer fuzzing on main branch
-- name: Extended Fuzzing (main branch only)
-  if: github.ref == 'refs/heads/main'
-  run: |
-    cd Tests/unit_tests
-    make fuzz FUZZ_MAX_SECS=300  # 5 minutes per function
-```
+`STUB_SRC` in the Makefile selects the C file that AutoFuzz scans.
 
 ---
 
-### GitLab CI
+## Building the firmware
 
-Create `.gitlab-ci.yml`:
-```yaml
-stages:
-  - test
-
-autofuzz:
-  stage: test
-  image: ubuntu:22.04
-  
-  before_script:
-    - apt-get update
-    - apt-get install -y clang libfuzzer-12-dev libcmocka-dev python3 make
-  
-  script:
-    - cd Tests/unit_tests
-    - make test
-  
-  artifacts:
-    when: on_failure
-    paths:
-      - Tests/unit_tests/crashes/
-    expire_in: 30 days
-  
-  timeout: 5 minutes
-```
+The firmware is built with **STM32CubeIDE** (tested with 1.17), not with the
+Makefile in this repository. The CubeIDE project files (`.project`,
+`.cproject`) are not in git. In CubeIDE use *File → New → STM32 Project from
+an Existing STM32CubeMX Configuration File (.ioc)* and choose
+`ServoProject.ioc`.
 
 ---
 
-## Understanding Test Output
+## CI
 
-### Success (No Bugs)
-```
-=== EDGE: deterministic_edge_Protocol_ProcessCommand ===
-[ RUN      ] test_Protocol_ProcessCommand_edge_1
-[       OK ] test_Protocol_ProcessCommand_edge_1
-...
-[  PASSED  ] 12 test(s).
-```
-
-### Failure (Bug Found)
-```
-=== EDGE: deterministic_edge_Protocol_ProcessCommand ===
-[ RUN      ] test_Protocol_ProcessCommand_edge_3
-AddressSanitizer: stack-buffer-overflow
-READ of size 1026 at 0x7ffc...
-    #0 in strtok
-    #1 in handle_servo_cmd test_common.c:80
-    
-SUMMARY: AddressSanitizer: stack-buffer-overflow
-```
-
-**What to do:**
-1. Note the function and line number
-2. Check `crashes/` directory for reproduction input
-3. Run: `./deterministic_edge_Protocol_ProcessCommand` to reproduce
-4. Fix the bug
-5. Re-run tests to verify fix
-
----
-
-## How It Works Internally
-```
-1. Scanner (scanner.py)
-   ↓
-   Extracts function signatures from object files
-   Example: void Protocol_ProcessCommand(ProtocolContext*, char*)
-   
-2. Generator (generator.py)
-   ↓
-   Creates test harnesses:
-   - deterministic_edge_*.c (boundary values)
-   - random_fuzz_*.c (LibFuzzer harnesses)
-   
-3. Makefile
-   ↓
-   Compiles with AddressSanitizer/UBSan
-   Runs tests
-   Reports crashes
-```
-
-**Key Technologies:**
-- **LibFuzzer:** Coverage-guided fuzzing engine
-- **AddressSanitizer:** Detects buffer overflows, use-after-free
-- **UndefinedBehaviorSanitizer:** Catches integer overflow, null pointer deref
-- **CMocka:** Unit test framework
-
----
-
-## Limitations & Future Work
-
-### Current Limitations
-1. **Only tests global functions** - Static functions are invisible
-2. **Requires manual buffer size config** - Can't auto-detect `#define BUFFER_SIZE`
-3. **No state sequences** - Tests functions individually, not call chains
-
-### Planned Improvements
-1. Parse source code directly (using libclang) to find static functions
-2. Extract buffer sizes from `#define` statements automatically
-3. Add stateful fuzzing for multi-step protocol testing
-
----
-
-## Troubleshooting
-
-### "No functions found"
-- Check `SRC_DIR` path in Makefile
-- Ensure files are compiled: `make build`
-- Run: `nm build/*.o` to see available symbols
-
-### "Fuzzer not found"
-```bash
-# Ubuntu
-sudo apt-get install libfuzzer-12-dev
-
-# macOS
-brew install llvm
-export PATH="/usr/local/opt/llvm/bin:$PATH"
-```
-
-### Tests run but find nothing
-- **Check config.py** - Are you testing actual buffer sizes?
-- Increase fuzzing time: `make fuzz FUZZ_MAX_SECS=300`
-- Add domain-specific test values to STRING_SEEDS
-
-### Crashes not preserved
-- Don't run `make clean` between fuzzing sessions
-- Crashes are in `crashes/` - version control this directory
-- Replay: `./random_fuzz_FUNCTION crashes/crash-*`
-
----
-
-## Project Structure
-```
-ServoProject/
-├── Core/                          # Your embedded firmware
-│   ├── Src/
-│   │   ├── protocol.c            # Code under test
-│   │   └── servo.c
-│   └── Inc/
-│
-├── Tests/unit_tests/              # AutoFuzz framework
-│   ├── autofuzz/                 # Core framework
-│   │   ├── scanner.py            # Extract function signatures
-│   │   ├── generator.py          # Generate test code
-│   │   ├── config.py             # ← EDIT: Your test values
-│   │   ├── main.py               # Orchestration
-│   │   └── autofuzz_rt.h         # Runtime helpers
-│   │
-│   ├── Makefile                  # ← EDIT: Paths to your code
-│   ├── test_common.c/h           # ← EDIT: Your mocks/stubs
-│   │
-│   ├── test_*.c                  # Manual unit tests (optional)
-│   ├── deterministic_edge_*.c    # Auto-generated (don't edit)
-│   ├── random_fuzz_*.c           # Auto-generated (don't edit)
-│   │
-│   ├── crashes/                  # Bug reproductions (version control!)
-│   └── lf_corpus/                # Evolved test corpus (ignore)
-│
-└── .github/workflows/
-    └── autofuzz.yml              # CI/CD configuration
-```
-
----
-
-## What You Get
-
-### Before AutoFuzz
-- Manual unit tests only
-- 20-30 test cases
-- No fuzzing
-- Bugs slip through to production
-
-### After AutoFuzz
-- Automated test generation
-- 200M+ test cases in 3 minutes
-- Found 2 critical security bugs
-- Runs on every commit (CI/CD)
-
----
+`.github/workflows/unit-and-fuzz.yml` runs build, unit, edge and fuzz on
+every push (with `continue-on-error`, because of the expected findings).
 
 ## License
 
-MIT License
-
----
-
-## Summary: 3 Steps to Get Started
-
-1. **Copy `autofuzz/` to your project**
-2. **Edit `config.py`** - Add your buffer sizes and protocol commands
-3. **Edit `Makefile`** - Point to your source files
-4. Run `make test`
-
-**That's it.** AutoFuzz generates and runs tests automatically.
-
----
-
-**Questions?** Open an issue or check the generated test code to understand what's being tested.
+See [LICENSE](LICENSE).
