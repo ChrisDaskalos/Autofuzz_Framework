@@ -40,11 +40,14 @@ The tests **intentionally fail** — they detect known bugs (thesis results). `m
 Consequences:
 - Fixing a bug (or changing line numbers in `test_common.c` / `protocol.c`) requires updating `Tests/expected_findings.txt` — entries reference `test_common.c:162` and `protocol.c:159`.
 - `Tests/legacy_thesis/Makefile`'s own `test` target and `make fuzz` exit 1 by design.
-- See README.md "Expected results" for the bug list and why four hand-written unit tests fail.
+- See `docs/FINDINGS.md` for the bug list, which findings are real firmware bugs vs. legacy-copy only, and why four hand-written unit tests fail. Keep it in sync when findings change.
 
 ## Architecture of the test side
 
-- **`Tests/legacy_thesis/`** tests a **PC copy** of the firmware logic in `test_common.c/.h` (with fake HAL), not `Core/Src` directly (`PROD_SRCS` is empty). It also has its own `protocol_defs.h`/`servo_defs.h` that differ slightly from `Core/Inc`. Keep this in mind when a change to the firmware should also be mirrored in the copy (or vice versa).
+User-facing docs: `docs/ARCHITECTURE.md` (flow diagram, commands, folder map), `docs/HOW_IT_WORKS.md` (worked example + glossary, quotes real log output), `docs/FINDINGS.md`. README.md is intentionally short and links to these.
+
+
+- **`Tests/legacy_thesis/`** (the thesis example, formerly `Tests/unit_tests`) tests a **PC copy** of the firmware logic in `test_common.c/.h` (with fake HAL), not `Core/Src` directly (`PROD_SRCS` is empty). It also has its own `protocol_defs.h`/`servo_defs.h` that differ slightly from `Core/Inc`. Keep this in mind when a change to the firmware should also be mirrored in the copy (or vice versa).
   - `autofuzz/main.py` → `scanner.py` (libclang: non-static functions with parameters; collects edge values from `config.py` per type plus literals/comparisons/switch cases in the source) → `generator.py` (caps to `EDGE_CAP`=12 values per parameter; writes `deterministic_edge_<fn>.c` and `random_fuzz_<fn>.c`). Output is deterministic. The file scanned is `STUB_SRC` (Makefile var).
   - Generation is stamped by `_autofuzz.stamp`; it reruns when `test_common.c` or the autofuzz Python files change.
   - `test_*.c` (excluding `test_common.c`) are hand-written CMocka tests, each built into `test_*.elf`.
