@@ -3,7 +3,7 @@
 Compare the findings of `make test` with Tests/expected_findings.txt.
 
 Reads:
-  Tests/results/unit.log, edge.log, fuzz.log   (output of Tests/unit_tests)
+  Tests/results/unit.log, edge.log, fuzz.log   (output of Tests/legacy_thesis)
   Tests/fuzz_manual/out/<fuzzer>.log           (output of Tests/fuzz_manual)
 
 Prints one line per stage, then as the very last line either
@@ -17,7 +17,7 @@ from pathlib import Path
 
 TESTS = Path(__file__).resolve().parent
 RESULTS = TESTS / "results"
-UNIT_DIR = TESTS / "unit_tests"
+UNIT_DIR = TESTS / "legacy_thesis"
 MANUAL_DIR = TESTS / "fuzz_manual"
 MANUAL_FUZZERS = ["fuzz_protocol_session", "fuzz_protocol_cmd", "fuzz_uart_dma"]
 STAGES = ["unit", "edge", "fuzz", "manual"]

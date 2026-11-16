@@ -11,7 +11,7 @@
 ## built in STM32CubeIDE (see README.md).
 .RECIPEPREFIX := >
 
-UNIT   := Tests/unit_tests
+UNIT   := Tests/legacy_thesis
 MANUAL := Tests/fuzz_manual
 RESULTS := Tests/results
 

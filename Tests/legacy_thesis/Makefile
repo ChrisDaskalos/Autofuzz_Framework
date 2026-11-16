@@ -207,7 +207,7 @@ test: build
 > $(MAKE) --no-print-directory edge || e=FAIL; \
 > $(MAKE) --no-print-directory fuzz || f=FAIL; \
 > echo ""; \
-> echo "================ SUMMARY (Tests/unit_tests) ================"; \
+> echo "================ SUMMARY (Tests/legacy_thesis) ================"; \
 > echo "  unit : $$u"; \
 > echo "  edge : $$e"; \
 > echo "  fuzz : $$f"; \

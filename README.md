@@ -94,8 +94,8 @@ delete its line from the list. The full logs are in `Tests/results/`.
 
 | # | Bug | Where | Found by |
 |---|---|---|---|
-| 1 | **Stack buffer overflow.** A command with 1024 or more characters and no line end fills the 1024-byte buffer with no `\0` at the end. Then `strtok`/`strrchr` read past the end of the buffer. | `Protocol_ProcessCommand` in `Tests/unit_tests/test_common.c` | `deterministic_edge_Protocol_ProcessCommand` |
-| 2 | **Signed integer overflow** in the checksum: `angle + step` with large numbers is undefined behaviour in C. Example input: password `1234`, menu `1`, then `2147483647,1,0`. In practice the sum wraps to a number whose low byte is 0, so checksum `0` is accepted and the command is queued (target clamped to 165). | `ComputeChecksumFromNumbers`: `Tests/unit_tests/test_common.c:162` and real firmware `Core/Src/protocol.c:159` | edge test, `random_fuzz_ComputeChecksumFromNumbers` (crashes in < 1 s), `test_manual_overflow`, `Tests/fuzz_manual` |
+| 1 | **Stack buffer overflow.** A command with 1024 or more characters and no line end fills the 1024-byte buffer with no `\0` at the end. Then `strtok`/`strrchr` read past the end of the buffer. | `Protocol_ProcessCommand` in `Tests/legacy_thesis/test_common.c` | `deterministic_edge_Protocol_ProcessCommand` |
+| 2 | **Signed integer overflow** in the checksum: `angle + step` with large numbers is undefined behaviour in C. Example input: password `1234`, menu `1`, then `2147483647,1,0`. In practice the sum wraps to a number whose low byte is 0, so checksum `0` is accepted and the command is queued (target clamped to 165). | `ComputeChecksumFromNumbers`: `Tests/legacy_thesis/test_common.c:162` and real firmware `Core/Src/protocol.c:159` | edge test, `random_fuzz_ComputeChecksumFromNumbers` (crashes in < 1 s), `test_manual_overflow`, `Tests/fuzz_manual` |
 
 **Not a bug: DMA length.** Earlier versions of `fuzz_uart_dma` reported a
 `memcpy` overflow and a wrap-around in `DMA_BUFFER_SIZE - remain`. The
@@ -108,7 +108,7 @@ code.)
 
 ### Unit tests that fail (and why)
 
-The hand-written unit tests in `Tests/unit_tests/test_*.c` describe how the
+The hand-written unit tests in `Tests/legacy_thesis/test_*.c` describe how the
 protocol **should** behave. Four of them fail because the code does
 something else. The real firmware (`Core/Src/protocol.c`) behaves the same
 way as the test copy.
@@ -133,7 +133,7 @@ Makefile                     the commands above (PC tests only)
 Dockerfile                   Ubuntu 24.04 + clang 18 test environment
 requirements.txt             Python package for AutoFuzz (libclang)
 
-Tests/unit_tests/            AutoFuzz + tests on a PC copy of the logic
+Tests/legacy_thesis/            AutoFuzz + tests on a PC copy of the logic
   autofuzz/                  the AutoFuzz tool (Python)
     main.py                  entry point: parse, find functions, write files
     scanner.py               finds functions and edge values with libclang
@@ -155,7 +155,7 @@ Files created by `make` (generated harnesses, binaries, `build/`, `logs/`,
 
 ## How AutoFuzz works
 
-1. `make build` runs `python3 -m autofuzz.main` in `Tests/unit_tests`.
+1. `make build` runs `python3 -m autofuzz.main` in `Tests/legacy_thesis`.
 2. **scanner.py** parses `test_common.c` with libclang. It takes every
    non-static function that has parameters, and collects edge values for
    each parameter: values from `config.py` for the type, plus numbers and
@@ -171,13 +171,13 @@ The generated files are the same on every run.
 
 ### Important: what is tested
 
-AutoFuzz tests `Tests/unit_tests/test_common.c`. This is a **PC copy** of
+AutoFuzz tests `Tests/legacy_thesis/test_common.c`. This is a **PC copy** of
 the firmware logic, not the firmware file `Core/Src/protocol.c` itself
 (the Makefile variable `PROD_SRCS` is empty). The copy behaves like the
 firmware, but the code is not identical. Bug 2 is also found in the real
 firmware by `Tests/fuzz_manual`.
 
-`Tests/unit_tests` also has its own copies of `protocol_defs.h` and
+`Tests/legacy_thesis` also has its own copies of `protocol_defs.h` and
 `servo_defs.h`. They are slightly different from `Core/Inc`
 (for example `SERVO_MIN_PULSE`/`SERVO_MAX_PULSE`).
 
@@ -187,7 +187,7 @@ Planned next step: run AutoFuzz directly on `Core/Src`.
 
 ## Use AutoFuzz on your own code
 
-1. Copy `Tests/unit_tests/autofuzz/`, `Makefile` and a `test_common.c/.h`
+1. Copy `Tests/legacy_thesis/autofuzz/`, `Makefile` and a `test_common.c/.h`
    that contains (or includes) the functions you want to test.
 2. Edit `autofuzz/config.py`: add your commands and, most importantly, your
    **buffer sizes** (size − 1, size, size + 1). Bug 1 was found because

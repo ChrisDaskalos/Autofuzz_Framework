@@ -12,14 +12,14 @@ Release
 **/*.list
 ServoProject.pdf
 
-Tests/unit_tests/build
-Tests/unit_tests/_autofuzz.stamp
-Tests/unit_tests/deterministic_edge_*
-Tests/unit_tests/random_fuzz_*
-Tests/unit_tests/test_manual
-Tests/unit_tests/crashes
-Tests/unit_tests/lf_corpus
-Tests/unit_tests/logs
+Tests/legacy_thesis/build
+Tests/legacy_thesis/_autofuzz.stamp
+Tests/legacy_thesis/deterministic_edge_*
+Tests/legacy_thesis/random_fuzz_*
+Tests/legacy_thesis/test_manual
+Tests/legacy_thesis/crashes
+Tests/legacy_thesis/lf_corpus
+Tests/legacy_thesis/logs
 
 Tests/fuzz_manual/bin
 Tests/fuzz_manual/out

@@ -27,9 +27,9 @@ docker build -t autofuzz . && docker run --rm autofuzz   # same as make test, in
 Python deps: `python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt`.
 
 Running a subset:
-- `make -C Tests/unit_tests unit|edge|fuzz` (each requires `make build` first).
-- A single unit test / edge test: `cd Tests/unit_tests && ./test_protocol_checksum.elf` or `./deterministic_edge_<Function>`.
-- A single fuzzer: `cd Tests/unit_tests && ./random_fuzz_<Function> -max_total_time=10 ./lf_corpus`.
+- `make -C Tests/legacy_thesis unit|edge|fuzz` (each requires `make build` first).
+- A single unit test / edge test: `cd Tests/legacy_thesis && ./test_protocol_checksum.elf` or `./deterministic_edge_<Function>`.
+- A single fuzzer: `cd Tests/legacy_thesis && ./random_fuzz_<Function> -max_total_time=10 ./lf_corpus`.
 - A single manual fuzzer: `make -C Tests/fuzz_manual run-fuzz_protocol_cmd FUZZ_MAX_SECS=30` (output in `Tests/fuzz_manual/out/`).
 - Reproduce a crash: run the fuzzer binary with the crash file as its only argument.
 
@@ -39,17 +39,17 @@ The tests **intentionally fail** — they detect known bugs (thesis results). `m
 
 Consequences:
 - Fixing a bug (or changing line numbers in `test_common.c` / `protocol.c`) requires updating `Tests/expected_findings.txt` — entries reference `test_common.c:162` and `protocol.c:159`.
-- `Tests/unit_tests/Makefile`'s own `test` target and `make fuzz` exit 1 by design.
+- `Tests/legacy_thesis/Makefile`'s own `test` target and `make fuzz` exit 1 by design.
 - See README.md "Expected results" for the bug list and why four hand-written unit tests fail.
 
 ## Architecture of the test side
 
-- **`Tests/unit_tests/`** tests a **PC copy** of the firmware logic in `test_common.c/.h` (with fake HAL), not `Core/Src` directly (`PROD_SRCS` is empty). It also has its own `protocol_defs.h`/`servo_defs.h` that differ slightly from `Core/Inc`. Keep this in mind when a change to the firmware should also be mirrored in the copy (or vice versa).
+- **`Tests/legacy_thesis/`** tests a **PC copy** of the firmware logic in `test_common.c/.h` (with fake HAL), not `Core/Src` directly (`PROD_SRCS` is empty). It also has its own `protocol_defs.h`/`servo_defs.h` that differ slightly from `Core/Inc`. Keep this in mind when a change to the firmware should also be mirrored in the copy (or vice versa).
   - `autofuzz/main.py` → `scanner.py` (libclang: non-static functions with parameters; collects edge values from `config.py` per type plus literals/comparisons/switch cases in the source) → `generator.py` (caps to `EDGE_CAP`=12 values per parameter; writes `deterministic_edge_<fn>.c` and `random_fuzz_<fn>.c`). Output is deterministic. The file scanned is `STUB_SRC` (Makefile var).
   - Generation is stamped by `_autofuzz.stamp`; it reruns when `test_common.c` or the autofuzz Python files change.
   - `test_*.c` (excluding `test_common.c`) are hand-written CMocka tests, each built into `test_*.elf`.
   - Generated `.c` files, binaries, `build/`, `crashes/`, `lf_corpus/`, `logs/` are gitignored — never commit them.
-- **`Tests/fuzz_manual/`** hand-written libFuzzer harnesses that link the **real** `Core/Src/protocol.c` and `servo.c` compiled with `-DUNIT_TEST -DFUZZING -DSTRICT_HAL_STUBS`. Firmware sources switch includes on `#ifdef UNIT_TEST` to pull in `Tests/fuzz_manual/test_common.h` (HAL stubs — distinct from the unit_tests one). `fuzz_uart_dma.c` is a copy of the DMA idle-callback logic from `main.c`; its fake DMA counter is limited to 0..`DMA_BUFFER_SIZE` (1024) to match hardware. `fuzz_custom_mutator.c` is linked into all harnesses. `corpus/` is committed read-only seeds; new inputs go to `work_corpus/`. `mock_protocol_multi.c` is not built.
+- **`Tests/fuzz_manual/`** hand-written libFuzzer harnesses that link the **real** `Core/Src/protocol.c` and `servo.c` compiled with `-DUNIT_TEST -DFUZZING -DSTRICT_HAL_STUBS`. Firmware sources switch includes on `#ifdef UNIT_TEST` to pull in `Tests/fuzz_manual/test_common.h` (HAL stubs — distinct from the legacy_thesis one). `fuzz_uart_dma.c` is a copy of the DMA idle-callback logic from `main.c`; its fake DMA counter is limited to 0..`DMA_BUFFER_SIZE` (1024) to match hardware. `fuzz_custom_mutator.c` is linked into all harnesses. `corpus/` is committed read-only seeds; new inputs go to `work_corpus/`. `mock_protocol_multi.c` is not built.
 - **CI** (`.github/workflows/unit-and-fuzz.yml`): native Ubuntu 24.04 job and Docker job both run `make test`; manual dispatch adds a long `make fuzz`.
 
 ## Firmware conventions

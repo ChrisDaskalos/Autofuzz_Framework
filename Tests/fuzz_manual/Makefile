@@ -1,5 +1,5 @@
 ## Hand-written libFuzzer harnesses.
-## Unlike Tests/unit_tests, these link the REAL firmware code
+## Unlike Tests/legacy_thesis, these link the REAL firmware code
 ## (Core/Src/protocol.c and Core/Src/servo.c), compiled with -DUNIT_TEST.
 ##
 ## Targets: build | fuzz | clean
