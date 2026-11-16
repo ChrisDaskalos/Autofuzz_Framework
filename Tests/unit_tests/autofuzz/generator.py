@@ -143,6 +143,42 @@ def _lookup_generic_edges_for_type(pt: str) -> List[Any]:
         return ['NULL']
     return ['0', '1', '-1', 'INT_MAX', 'INT_MIN']
 
+_NAMED_INTS = {
+    "INT_MIN": -2**31, "INT_MAX": 2**31 - 1, "UINT_MAX": 2**32 - 1,
+    "LONG_MIN": -2**63, "LONG_MAX": 2**63 - 1, "NULL": 0,
+}
+
+def _seed_sort_key(raw: Any):
+    """Numbers (and INT_MAX etc.) first, by value; then text by length."""
+    s = str(raw).strip()
+    if s in _NAMED_INTS:
+        return (0, _NAMED_INTS[s], s)
+    try:
+        return (0, int(s, 0), s)
+    except ValueError:
+        return (1, len(s), s)
+
+def _ordered_seeds(seeds: Any) -> List[Any]:
+    """
+    Turn the scanner's *set* of seeds into a list with a fixed order.
+
+    A Python set of strings has a different order in every run, and only
+    the first EDGE_CAP seeds are used, so before this function every build
+    tested a different random choice of seeds (sometimes with the long
+    buffer-overflow strings, sometimes without).
+
+    Now: sort (numbers by value, strings by length), and if there are more
+    than EDGE_CAP, take EDGE_CAP values spread evenly from first to last.
+    The smallest and largest values (e.g. the longest string) are always
+    kept.
+    """
+    ordered = sorted(set(seeds), key=_seed_sort_key)
+    n, k = len(ordered), EDGE_CAP
+    if n <= k or k < 2:
+        return ordered[:max(k, 0)] if n > k else ordered
+    picks = sorted({round(j * (n - 1) / (k - 1)) for j in range(k)})
+    return [ordered[p] for p in picks]
+
 def _seed_list(pt: str, seeds: List[Any]) -> List[str]:
     """
     Turn a list of raw seeds into C tokens, ensuring extremes for integers.
@@ -353,7 +389,7 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
             continue
         
         # Prefer per-function edges if supplied; otherwise consult config.GENERIC_EDGES
-        seed_set_raw = list(edges[i]) if (i < len(edges) and edges[i] is not None) else []
+        seed_set_raw = _ordered_seeds(edges[i]) if (i < len(edges) and edges[i] is not None) else []
         vals = _seed_list(pt, seed_set_raw)
         
         arr_name = f"a{i}_vals"
