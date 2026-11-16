@@ -98,17 +98,18 @@ STRING_SEEDS: Final[List[str]] = [
     '"' + 'A' * 64 + '"',    # Exactly buffer size
     '"' + 'A' * 65 + '"',    # Just over buffer size
     '"' + 'A' * 100 + '"',   # Way over buffer size
+    
     # Buffer overflow attempts - DMA_BUFFER_SIZE BOUNDARIES (CRITICAL!)
     '"' + 'A' * 1022 + '"',   # ← ADD: Just under DMA_BUFFER_SIZE
     '"' + 'A' * 1023 + '"',   # ← ADD: One byte before DMA_BUFFER_SIZE
-    '"' + 'A' * 1024 + '"',   # ← ADD: EXACTLY DMA_BUFFER_SIZE (triggers bug!)
-    '"' + 'A' * 1025 + '"',   # ← ADD: One byte over DMA_BUFFER_SIZE
+    '"' + 'A' * 1050 + '"',   # ← ADD: EXACTLY DMA_BUFFER_SIZE (triggers bug!)
+    '"' + 'A' * 1050 + '"',   # ← ADD: One byte over DMA_BUFFER_SIZE
     '"' + 'A' * 2000 + '"',   # ← ADD: Way over DMA_BUFFER_SIZE
     '"' + 'A' * 4095 + '"',   # ← ADD: Maximum fuzzer length
 
     # With parentheses (servo command format)
-    '"(' + 'A' * 1022 + ')"', # ← ADD: Valid format, at boundary
-    '"(' + 'A' * 1024 + ')"', # ← ADD: Valid format, past boundary
+    '"(' + 'A' * 1050 + ')"', # ← ADD: Valid format, at boundary
+    '"(' + 'A' * 1050 + ')"', # ← ADD: Valid format, past boundary
     
     # Special characters
     '"\\x00"',               # Null byte

@@ -8,7 +8,7 @@
 
 #include "test_common.h"
 
-static unsigned int a0_vals[] = { INT_MIN, 0, 1, 2, 32768, 2147483648, 32767, 4294967294, 2147483647, 65535 };
+static unsigned int a0_vals[] = { INT_MIN, 0, 1, 2, 32768, 2147483648, 32767, 65535, 4294967295, INT_MAX };
 #define a0_vals_LEN (sizeof(a0_vals)/sizeof(a0_vals[0]))
 
 static void test_HAL_Delay_edge_1(void **state) {
@@ -83,7 +83,7 @@ static void test_HAL_Delay_edge_7(void **state) {
 
 static void test_HAL_Delay_edge_8(void **state) {
     (void)state;
-    unsigned int a0 = (unsigned int)4294967294;
+    unsigned int a0 = (unsigned int)65535;
 
     /* Call target function */
     HAL_Delay(a0);
@@ -93,7 +93,7 @@ static void test_HAL_Delay_edge_8(void **state) {
 
 static void test_HAL_Delay_edge_9(void **state) {
     (void)state;
-    unsigned int a0 = (unsigned int)2147483647;
+    unsigned int a0 = (unsigned int)4294967295;
 
     /* Call target function */
     HAL_Delay(a0);
@@ -103,7 +103,7 @@ static void test_HAL_Delay_edge_9(void **state) {
 
 static void test_HAL_Delay_edge_10(void **state) {
     (void)state;
-    unsigned int a0 = (unsigned int)65535;
+    unsigned int a0 = (unsigned int)INT_MAX;
 
     /* Call target function */
     HAL_Delay(a0);

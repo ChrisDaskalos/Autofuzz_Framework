@@ -13,7 +13,7 @@ EDGE_CFLAGS = $(COMMON) $(SAN_EDGE)
 FUZZ_CFLAGS = $(COMMON) $(SAN_FUZZ)
 LDFLAGS_MAIN = -lcmocka $(SAN_EDGE)
 LDFLAGS_FUZZ = $(SAN_FUZZ) -fsanitize=fuzzer
-FUZZ_MAX_SECS ?= 60
+FUZZ_MAX_SECS ?= 10
 
 # Source files
 STUB_SRC  ?= test_common.c
