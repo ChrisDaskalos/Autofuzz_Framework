@@ -7,6 +7,18 @@ from typing import List, Tuple
 
 from clang import cindex
 
+# Optional: tell the Python bindings which libclang to load.
+#   CLANG_LIB=/path/to/libclang.so      (a file)
+#   LIBCLANG_PATH=/usr/lib/llvm-18/lib  (a folder that contains libclang.so)
+# If neither is set, the bindings find libclang on their own (the pip
+# package "libclang" ships its own copy, see requirements.txt).
+_clang_lib = os.getenv("CLANG_LIB") or os.getenv("LIBCLANG_PATH")
+if _clang_lib and not cindex.Config.loaded:
+    if os.path.isdir(_clang_lib):
+        cindex.Config.set_library_path(_clang_lib)
+    else:
+        cindex.Config.set_library_file(_clang_lib)
+
 from .config import STUB_SOURCES
 from . import scanner
 from . import generator

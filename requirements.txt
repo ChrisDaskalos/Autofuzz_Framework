@@ -1,0 +1,7 @@
+# Python packages for the AutoFuzz harness generator (Tests/unit_tests/autofuzz).
+# The "libclang" package includes its own libclang.so, so it does not
+# depend on which LLVM version the system has installed.
+#
+#   python3 -m venv .venv && . .venv/bin/activate
+#   pip install -r requirements.txt
+libclang==18.1.1
