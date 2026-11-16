@@ -39,7 +39,7 @@ pip install -r requirements.txt
 
 make deps      # checks that everything is installed
 make build     # generates the harnesses and compiles all tests
-make test      # runs all tests and prints a summary
+make test      # runs all tests; last line: "All results as expected"
 ```
 
 If `clang` is not found, either install the `clang` package or use
@@ -55,7 +55,7 @@ Run these from the repository root.
 |---|---|---|
 | `make deps` | Checks clang, libFuzzer, CMocka, Python libclang. Tells you what is missing. | 1 s |
 | `make build` | Runs AutoFuzz (writes the harnesses), then compiles all tests and fuzzers. | ~30 s |
-| `make test` | Unit tests + edge tests + 10 s per fuzzer, then a summary. | ~3 min |
+| `make test` | Unit tests + edge tests + 10 s per fuzzer, then compares the findings with `Tests/expected_findings.txt`. Exit 0 = as expected. | ~3 min |
 | `make fuzz` | Every fuzzer for `FUZZ_MAX_SECS` seconds (default 60). | ~13 min |
 | `make clean` | Deletes everything that the commands above created. | 1 s |
 
@@ -65,19 +65,30 @@ Change the times: `make fuzz FUZZ_MAX_SECS=600`, `make test TEST_FUZZ_SECS=30`.
 
 ## Expected results
 
-**Today `make test` ends with an error. This is correct:** the tests find
-known bugs, and these bugs are the results of the thesis. The summary at
-the end shows what was found and what was expected:
+The tests find known bugs (the results of the thesis). `make test` compares
+everything it finds with the list in
+[`Tests/expected_findings.txt`](Tests/expected_findings.txt):
 
 ```
-========================= SUMMARY =========================
-  unit tests (hand-written)      : FAIL   expected: FAIL
-  edge tests (AutoFuzz)          : FAIL   expected: FAIL
-  fuzz (AutoFuzz harnesses)      : FAIL   expected: FAIL
-  fuzz (Tests/fuzz_manual)       : FAIL   expected: FAIL
+============================ RESULTS ============================
+  unit     5 findings  (expected: 5 required; new: 0)
+  edge     2 findings  (expected: 2 required; new: 0)
+  fuzz     1 findings  (expected: 1 required + 1 maybe; new: 0)
+  manual   ...
+=================================================================
+All results as expected
 ```
 
-If a line says `PASS`, a known bug has gone away. Then update this section.
+- **Exit code 0, last line `All results as expected`:** every finding is in
+  the list, and every required finding was found.
+- **Exit code 1, last line `UNEXPECTED: ...`:** something is different: a
+  new finding, an expected finding that is gone (maybe a bug was fixed), or
+  a test that did not run. The lines above it list each difference.
+  (After that, `make` adds its own line `make: *** [...] Error 1`.)
+
+A `maybe` line in the list is a known bug that a short random fuzzing run
+finds only sometimes; it is allowed but not required. When you fix a bug,
+delete its line from the list. The full logs are in `Tests/results/`.
 
 ### Bugs found (thesis results)
 

@@ -24,3 +24,4 @@ Tests/unit_tests/logs
 Tests/fuzz_manual/bin
 Tests/fuzz_manual/out
 Tests/fuzz_manual/work_corpus
+Tests/results/

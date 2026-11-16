@@ -2,7 +2,8 @@
 ##
 ##   make deps    check that the needed tools are installed
 ##   make build   generate harnesses + compile all tests and fuzzers
-##   make test    unit + edge tests + short fuzzing (about 2 minutes)
+##   make test    unit + edge + short fuzzing, compared with the expected
+##                findings (about 3 minutes; exit 0 = as expected)
 ##   make fuzz    longer fuzzing of all fuzzers (FUZZ_MAX_SECS each)
 ##   make clean   remove everything that build/test/fuzz created
 ##
@@ -12,6 +13,7 @@
 
 UNIT   := Tests/unit_tests
 MANUAL := Tests/fuzz_manual
+RESULTS := Tests/results
 
 # Seconds per fuzzer for `make fuzz` and for `make test`
 FUZZ_MAX_SECS  ?= 60
@@ -44,25 +46,23 @@ build: deps
 > $(MAKE) -C $(UNIT) build
 > $(MAKE) -C $(MANUAL) build
 
-# Every stage runs even if an earlier one fails; one summary at the end.
-# Today every stage reports known findings on purpose (README.md,
-# "Expected results"), so `make test` exits with an error.
+# Every stage runs even if an earlier one fails. The output is saved in
+# Tests/results/ and compared with Tests/expected_findings.txt.
+# Exit code 0 = the findings are exactly the expected ones.
+# Fuzz state from earlier runs is removed first, so every run starts the same.
 test: build
-> @u=PASS; e=PASS; f=PASS; m=PASS; \
-> $(MAKE) --no-print-directory -C $(UNIT) unit || u=FAIL; \
-> $(MAKE) --no-print-directory -C $(UNIT) edge || e=FAIL; \
-> $(MAKE) --no-print-directory -C $(UNIT) fuzz FUZZ_MAX_SECS=$(TEST_FUZZ_SECS) || f=FAIL; \
-> $(MAKE) --no-print-directory -C $(MANUAL) fuzz FUZZ_MAX_SECS=$(TEST_FUZZ_SECS) || m=FAIL; \
-> echo ""; \
-> echo "========================= SUMMARY ========================="; \
-> echo "  unit tests (hand-written)      : $$u   expected: FAIL"; \
-> echo "  edge tests (AutoFuzz)          : $$e   expected: FAIL"; \
-> echo "  fuzz (AutoFuzz harnesses)      : $$f   expected: FAIL"; \
-> echo "  fuzz (Tests/fuzz_manual)       : $$m   expected: FAIL"; \
-> echo "  'expected: FAIL' = known bugs, see README.md 'Expected results'."; \
-> echo "  If a line says PASS, a known bug is gone: update README.md."; \
-> echo "==========================================================="; \
-> [ "$$u$$e$$f$$m" = "PASSPASSPASSPASS" ]
+> @rm -rf $(RESULTS) $(UNIT)/lf_corpus $(UNIT)/crashes $(UNIT)/logs \
+>        $(MANUAL)/out $(MANUAL)/work_corpus
+> @mkdir -p $(RESULTS)
+> @$(MAKE) --no-print-directory -C $(UNIT) unit > $(RESULTS)/unit.log 2>&1; \
+>  grep -E '^=== TEST|^\[  (PASSED|FAILED)  \] [0-9a-z]|^SUMMARY' $(RESULTS)/unit.log; true
+> @$(MAKE) --no-print-directory -C $(UNIT) edge > $(RESULTS)/edge.log 2>&1; \
+>  grep -E '^=== EDGE|^\[  (PASSED|FAILED)  \] [0-9a-z]|^SUMMARY' $(RESULTS)/edge.log; true
+> @$(MAKE) --no-print-directory -C $(UNIT) fuzz FUZZ_MAX_SECS=$(TEST_FUZZ_SECS) > $(RESULTS)/fuzz.log 2>&1; \
+>  grep -E '^=== FUZZ|^Done|^SUMMARY' $(RESULTS)/fuzz.log; true
+> @$(MAKE) --no-print-directory -C $(MANUAL) fuzz FUZZ_MAX_SECS=$(TEST_FUZZ_SECS) > $(RESULTS)/manual.log 2>&1; \
+>  grep -E '^=== MANUAL|^Done|^SUMMARY' $(RESULTS)/manual.log; true
+> @$(PYTHON) Tests/check_results.py
 
 # Both fuzz suites always run; the exit code is 1 if either found something.
 fuzz: build
@@ -76,3 +76,4 @@ fuzz: build
 clean:
 > $(MAKE) -C $(UNIT) clean
 > $(MAKE) -C $(MANUAL) clean
+> rm -rf $(RESULTS)

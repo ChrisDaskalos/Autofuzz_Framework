@@ -39,6 +39,9 @@ Tests/unit_tests/lf_corpus/
 Tests/unit_tests/corpus/
 Tests/unit_tests/logs/
 
+# Output of the top-level `make test`
+Tests/results/
+
 # =============================================================================
 # Hand-written fuzzers (Tests/fuzz_manual)
 # =============================================================================
