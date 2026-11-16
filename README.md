@@ -210,8 +210,16 @@ an Existing STM32CubeMX Configuration File (.ioc)* and choose
 
 ## CI
 
-`.github/workflows/unit-and-fuzz.yml` runs build, unit, edge and fuzz on
-every push (with `continue-on-error`, because of the expected findings).
+`.github/workflows/unit-and-fuzz.yml` runs on every push and pull request,
+in two jobs:
+
+- **native**: on Ubuntu 24.04: `make deps`, `make build`, `make test`.
+  If the results are unexpected, the logs are uploaded as an artifact.
+- **docker**: `docker build` and `docker run` (runs `make test` in the image).
+
+Both are green only when the findings match `Tests/expected_findings.txt`.
+"Run workflow" on GitHub also starts a longer `make fuzz` (default 300 s per
+fuzzer) and uploads its results.
 
 ## License
 
