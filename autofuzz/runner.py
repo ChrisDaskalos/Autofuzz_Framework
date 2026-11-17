@@ -36,6 +36,9 @@ WARN_FLAGS = ["-Wall", "-Wextra", "-g", "-O0", "-fno-omit-frame-pointer"]
 HARNESS_FLAGS = ["-Werror=implicit-function-declaration"]
 SAN_EDGE = ["-fsanitize=address,undefined", "-fno-sanitize-recover=address"]
 SAN_FUZZ = ["-fsanitize=address,undefined,integer", "-fno-sanitize-recover=all"]
+# The project sources in a fuzzer need coverage instrumentation too, or
+# libFuzzer only sees the harness and mutates blindly (cov stays ~4).
+FUZZ_SOURCE_FLAGS = ["-fsanitize=fuzzer-no-link"]
 
 RUN_ENV = {
     "CMOCKA_MESSAGE_OUTPUT": "STDOUT",
@@ -197,7 +200,8 @@ def build(cfg: Config, out: Path, targets: List[str]) -> Dict[str, List[str]]:
     from .main import read_skipped
     result: Dict[str, List[str]] = {"edge": [], "fuzz": [], "skipped": read_skipped(L.gen)}
     objs: Dict[str, List[str]] = {"edge": [], "fuzz": []}
-    for kind, odir, san in (("edge", L.obj_edge, SAN_EDGE), ("fuzz", L.obj_fuzz, SAN_FUZZ)):
+    for kind, odir, san in (("edge", L.obj_edge, SAN_EDGE),
+                            ("fuzz", L.obj_fuzz, SAN_FUZZ + FUZZ_SOURCE_FLAGS)):
         odir.mkdir(parents=True, exist_ok=True)
         for i, src in enumerate(cfg.sources):
             obj = odir / f"{i:02d}_{src.stem}.o"

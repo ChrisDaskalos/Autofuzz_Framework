@@ -16,11 +16,14 @@ the real `Core/Src/protocol.c` and `servo.c` (the root `autofuzz.yaml`), compile
 | Finding | In the legacy copy | In the real firmware | Found by AutoFuzz on the real code (M4) | Status |
 |---|---|---|---|---|
 | Bug 1: stack buffer overflow (command of 1024+ characters) | yes | **no** | no (as expected) | only in the copy |
-| Bug 2: signed integer overflow in `angle + step` | yes (`test_common.c:162`) | **yes** (`Core/Src/protocol.c:159`) | **yes**, also through `Protocol_ProcessCommand` | **real bug** |
+| Bug 2: signed integer overflow in `angle + step` | yes (`test_common.c:162`, and `test_common.c:94`) | **yes** (`Core/Src/protocol.c:159`) | **yes**, also through `Protocol_ProcessCommand` | **real bug** |
 | `assert` in `Servo_Ramp` for step 0 or step > 45 | – (the copy has no assert) | **yes** (`Core/Src/servo.c:40`) | **yes** | **real behaviour** |
 | 4 failing unit tests (spaces around `B`, a 4th field, step 0, negative step) | yes | **yes** | – (unit tests only) | **real behaviour** |
 | DMA length overflow in `fuzz_uart_dma` (old) | – | **no** | – (`main.c` is not covered) | was a harness mistake, fixed |
 | `main.c` does not compile: `dmaBuffer[64]` vs `dmaBuffer[1024]` | – | **yes** (`Core/Inc/main.h:39`, `protocol_defs.h:10`) | – (seen by the compiler, see below) | **to check in CubeIDE** |
+
+Since the fuzzer fix in 1.0 (see [below](#the-fuzzers-were-blind-fixed-in-10)),
+the generated fuzzers find more. No new bug was found in the real firmware.
 
 The full list that `make test` checks is in
 [`Tests/expected_findings.txt`](../Tests/expected_findings.txt) (and, for the
@@ -217,6 +220,51 @@ does, the IDE project must differ from git. If it does not, one value of
 
 ---
 
+## The fuzzers were blind (fixed in 1.0)
+
+**What was wrong.** A libFuzzer fuzzer learns which inputs reach new code
+through *coverage instrumentation*. AutoFuzz compiled the test harness with
+`-fsanitize=fuzzer`, but the **code under test** (`sources`) without
+`-fsanitize=fuzzer-no-link`. So libFuzzer saw only the few branches of the
+harness (`cov: 4` in every log) and mutated its inputs blindly. Since 1.0,
+`autofuzz/runner.py` compiles the sources of a fuzzer with
+`-fsanitize=fuzzer-no-link`.
+
+**The thesis version had the same problem.** In `thesis-v1`,
+`Tests/unit_tests/Makefile` compiled the code under test with
+`FUZZ_CFLAGS = $(COMMON) $(SAN_FUZZ)`, without `-fsanitize=fuzzer-no-link`,
+and only the link step had `-fsanitize=fuzzer`. So the thesis fuzzing
+results of the *generated* fuzzers came from blind, random inputs. The
+*hand-written* fuzzers in `Tests/fuzz_manual/` were not affected: they compile
+every file with `-fsanitize=fuzzer`.
+
+**What changed (10 s per fuzzer, 5 runs):**
+
+| Fuzzer | Before the fix | After the fix |
+|---|---|---|
+| real `random_fuzz_Protocol_ProcessCommand` | Bug 2 (`protocol.c:159`) only sometimes | Bug 2 in 5 of 5 runs |
+| legacy `random_fuzz_Protocol_ProcessCommand` | Bug 1 only sometimes | always a finding: Bug 1 (3 runs) or Bug 2 at `test_common.c:94` (2 runs) |
+| ringbuf `random_fuzz_cli_run`, `random_fuzz_cli_execute` | never, also not in 300 s with a dictionary | the off-by-one in about 1 s, 5 of 5 runs |
+
+**New finding (legacy copy only): Bug 2 at `test_common.c:94`.** The copy's
+`Protocol_ProcessCommand` checks the checksum with
+`if ((uint8_t)(angle + step) != (uint8_t)cks)`, so a large angle and step
+overflow `int` there too:
+
+```
+test_common.c:94:25: runtime error: signed integer overflow: 1260588259 + 1720980707 cannot be represented in type 'int'
+```
+
+Input (31 bytes, found by the fuzzer): `5555555555\t\t,57555555555,\t55555`
+(hex `35 35 35 35 35 35 35 35 35 35 09 09 2c 35 37 35 35 35 35 35 35 35 35 35 2c 09 35 35 35 35 35`).
+Repeat it: write these bytes to a file and run
+`Tests/legacy_thesis/autofuzz-out/bin/random_fuzz_Protocol_ProcessCommand <file>`.
+The real firmware does this sum only in `ComputeChecksumFromNumbers`
+(`protocol.c:159`, already Bug 2), so it has no second place. No new finding
+appeared in the real firmware.
+
+---
+
 ## The second project: `examples/ringbuf_cli` (M5)
 
 Not part of the firmware. A small plain-C project with **one bug added on
@@ -226,7 +274,7 @@ writes one byte past the 8-byte buffer.
 
 | Finding | Found by | Expected list |
 |---|---|---|
-| `ASAN global-buffer-overflow ringbuf.c:34 in ringbuf_push` | `deterministic_edge_cli_run` (always); the 10 s fuzzers only by luck (`maybe`) | [`examples/ringbuf_cli/expected_findings.txt`](../examples/ringbuf_cli/expected_findings.txt) |
+| `ASAN global-buffer-overflow ringbuf.c:34 in ringbuf_push` | `deterministic_edge_cli_run`, and both fuzzers `random_fuzz_cli_run` / `random_fuzz_cli_execute` by themselves (in about 1 s, since the fuzzer fix) | [`examples/ringbuf_cli/expected_findings.txt`](../examples/ringbuf_cli/expected_findings.txt) |
 
 Details: [the example's README](../examples/ringbuf_cli/README.md) and
 [GETTING_STARTED.md](GETTING_STARTED.md).

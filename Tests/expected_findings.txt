@@ -39,7 +39,14 @@ fuzz    random_fuzz_ComputeChecksumFromNumbers        UBSAN signed-integer-overf
 
 # --- Bug 1: stack buffer overflow, command of 1024+ characters
 edge    deterministic_edge_Protocol_ProcessCommand    ASAN stack-buffer-overflow .*
+# The fuzzer stops at the first crash. In 5 runs of 10 s it always found one
+# of these two, but not always the same one: so both are "maybe".
 maybe fuzz random_fuzz_Protocol_ProcessCommand      ASAN stack-buffer-overflow .*
+
+# --- Bug 2 again in the legacy copy: its Protocol_ProcessCommand adds
+#     angle + step itself (test_common.c:94). Found since the fuzzers have
+#     coverage (-fsanitize=fuzzer-no-link). Not in the real firmware.
+maybe fuzz random_fuzz_Protocol_ProcessCommand      UBSAN \S+ test_common\.c:94
 
 # --- Bug 2 in the real firmware (Core/Src/protocol.c)
 manual  fuzz_protocol_session   UBSAN undefined-behavior protocol\.c:159
@@ -51,7 +58,7 @@ manual  fuzz_protocol_cmd       UBSAN undefined-behavior protocol\.c:159
 real-edge  deterministic_edge_ComputeChecksumFromNumbers  UBSAN signed-integer-overflow protocol\.c:159
 real-fuzz  random_fuzz_ComputeChecksumFromNumbers         UBSAN signed-integer-overflow protocol\.c:159
 real-edge  deterministic_edge_Protocol_ProcessCommand     UBSAN signed-integer-overflow protocol\.c:159
-maybe real-fuzz random_fuzz_Protocol_ProcessCommand       UBSAN signed-integer-overflow protocol\.c:159
+real-fuzz  random_fuzz_Protocol_ProcessCommand            UBSAN signed-integer-overflow protocol\.c:159
 # Step 0 or step > SERVO_MAX_STEP reaches the assert in Servo_Ramp
 real-edge  deterministic_edge_Servo_Ramp                  ASSERT servo\.c:40 in Servo_Ramp
 real-fuzz  random_fuzz_Servo_Ramp                         ASSERT servo\.c:40 in Servo_Ramp
