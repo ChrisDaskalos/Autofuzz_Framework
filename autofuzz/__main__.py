@@ -48,7 +48,8 @@ def cmd_init(args) -> int:
         return 1
     dest.write_text(TEMPLATE.read_text(encoding="utf-8"), encoding="utf-8")
     print(f"autofuzz: wrote {dest}")
-    print("Next: list your .c files under 'sources:', then run:  autofuzz run")
+    print("Next: fill in the 3 REQUIRED keys (sources, include_dirs, harness.includes),")
+    print("      then run:  autofuzz run")
     return 0
 
 

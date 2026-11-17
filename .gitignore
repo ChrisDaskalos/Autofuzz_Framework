@@ -47,7 +47,8 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
-/build/          # created by `pip install .`
+# created by `pip install .`
+/build/
 .pytest_cache/
 
 # =============================================================================

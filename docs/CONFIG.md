@@ -22,10 +22,13 @@ autofuzz: error: autofuzz.yaml: unknown key 'limts'. Did you mean 'limits'? Allo
 
 ## All keys
 
+To start, you must fill in 3 keys: `sources`, `include_dirs` and `harness.includes`.
+`autofuzz init` marks them **REQUIRED** in the file it writes. All other keys are optional.
+
 | Key | Type | Default | What it does |
 |---|---|---|---|
 | `sources` | list of paths | (none, required) | The `.c` files to test. AutoFuzz writes tests for every non-static function defined in them, and compiles and links them into every test program. |
-| `include_dirs` | list of paths | `[]` | Folders with the headers your sources include. Passed as `-I`, in this order. |
+| `include_dirs` | list of paths | `[]` (fill in to start) | Folders with the headers your sources include. Passed as `-I`, in this order. |
 | `defines` | list | `[]` | Preprocessor defines, passed as `-D`. `UNIT_TEST` or `BUF=64`. |
 | `cflags` | list | `[-std=c11]` | More compiler flags. |
 | `compiler` | text | `clang` | The C compiler. It must be clang, because libFuzzer is part of clang. `clang-18`, for example. |
@@ -36,7 +39,7 @@ autofuzz: error: autofuzz.yaml: unknown key 'limts'. Did you mean 'limits'? Allo
 | `limits.int_ranges` | map | `{}` | The valid range of an integer parameter: `Function.param: [min, max]`. AutoFuzz then tests `min-1, min, min+1, middle, max-1, max, max+1` for that parameter (plus `INT_MIN` and `INT_MAX`, which every integer gets), instead of the default values for its type. Example: `Servo_SetAngle.angle: [0, 180]`. |
 | `limits.string_seeds` | list | see below | Text inputs for `char *` parameters. **Added** to the default list. |
 | `limits.default_string_seeds` | true/false | `true` | `false` = use only your own `string_seeds`. |
-| `harness.includes` | list | `[]` | Headers that every generated test includes. Together they must declare the functions under test. |
+| `harness.includes` | list | `[]` (fill in to start) | Headers that every generated test includes. Together they must declare the functions under test. |
 | `harness.setup` | list | `[]` | How to prepare a struct parameter before the call (see below). |
 | `fuzz.seconds` | number | `10` | Seconds per fuzzer for `autofuzz run`. `--fuzz-seconds N` overrides it. |
 | `output_dir` | path | `autofuzz-out` | Where AutoFuzz writes everything. Add it to `.gitignore`. |
