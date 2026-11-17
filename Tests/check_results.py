@@ -21,6 +21,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from autofuzz.findings import parse, parse_expected, compare  # noqa: E402  (shared with the report)
+
 TESTS = Path(__file__).resolve().parent
 ROOT = TESTS.parent
 RESULTS = TESTS / "results"
@@ -43,85 +46,6 @@ STAGES = ["unit"]
 for _prefix, _ in SUITES.values():
     STAGES += [f"{_prefix}edge", f"{_prefix}fuzz"]
 STAGES += ["skipped", "manual"]
-
-HEADER = re.compile(r"^=== (?:TEST|EDGE|FUZZ): (?:\./)?(\S+) ===")
-FAILED = re.compile(r"^\[  FAILED  \] (\w+)\s*$")
-SUMMARY = re.compile(r"^SUMMARY: (AddressSanitizer|UndefinedBehaviorSanitizer|libFuzzer): (.*)$")
-# glibc prints the function name or its full signature: "void f(int)"
-ASSERT = re.compile(r"^\S+: (?:\S*/)?([\w.+-]+\.(?:c|h)):(\d+): (.+?): Assertion `.*' failed\.$")
-# Written by the autofuzz runner (autofuzz/review.py) after a report that may be
-# caused by the test itself. The finding is then "REVIEW (<reason>) <finding>".
-REVIEW = re.compile(r"^AUTOFUZZ: NEEDS REVIEW \((.*?)(?::.*)?\): (.*)$")
-LOCATION = re.compile(r"([\w.+-]+\.(?:c|h|cc|cpp|inc)):(\d+)")
-
-
-def finding_from_summary(tool: str, rest: str) -> str:
-    """Turn a sanitizer SUMMARY line into a short, compiler-independent text."""
-    rest = re.sub(r"\(BuildId: [0-9a-f]+\)", "", rest).strip()
-    kind = rest.split()[0] if rest else "?"
-    loc = LOCATION.search(rest)
-    where = f"{loc.group(1)}:{loc.group(2)}" if loc else ""
-    if tool == "UndefinedBehaviorSanitizer":
-        return f"UBSAN {kind} {where}".strip()
-    if tool == "libFuzzer":
-        return f"LIBFUZZER {rest}"
-    func = rest.rsplit(" in ", 1)[1].strip() if " in " in rest else ""
-    return f"ASAN {kind} {where} in {func}".replace("  ", " ")
-
-
-def finding_from_line(line):
-    """A SUMMARY or assert line -> finding text, or None."""
-    m = SUMMARY.match(line)
-    if m:
-        return finding_from_summary(m.group(1), m.group(2))
-    m = ASSERT.match(line)
-    if m:
-        func = re.search(r"(\w+)\s*\(", m.group(3))
-        return f"ASSERT {m.group(1)}:{m.group(2)} in {func.group(1) if func else m.group(3)}"
-    return None
-
-
-def parse(lines, program=None):
-    """Return {program: {"findings": set, "done": bool}} for one log."""
-    progs = {}
-
-    def cur():
-        return progs.setdefault(program, {"findings": set(), "done": False, "review": set()})
-
-    for line in lines:
-        line = line.rstrip("\n")
-        m = HEADER.match(line)
-        if m:
-            program = m.group(1)
-            cur()
-            continue
-        if program is None:
-            continue
-        if line.startswith("Done ") and " runs in " in line:
-            cur()["done"] = True
-        m = FAILED.match(line)
-        if m:
-            cur()["findings"].add(f"FAILED {m.group(1)}")
-        m = REVIEW.match(line)
-        if m:
-            f = finding_from_line(m.group(2))
-            if f:
-                cur()["findings"].discard(f)
-                cur()["review"].add(f)
-                cur()["findings"].add(f"REVIEW ({m.group(1)}) {f}")
-            continue
-        f = finding_from_line(line)
-        if f and f not in cur()["review"]:
-            cur()["findings"].add(f)
-
-    # "deadly signal" only repeats a sanitizer or assert report. Keep it only
-    # when there is no such report (e.g. a plain abort or trap).
-    for p in progs.values():
-        sanitizer = [f for f in p["findings"] if re.match(r"(REVIEW \(.*?\) )?(ASAN|UBSAN|ASSERT)", f)]
-        if sanitizer:
-            p["findings"].discard("LIBFUZZER deadly signal")
-    return progs
-
 
 def read(path: Path):
     return path.read_text(errors="replace").splitlines() if path.exists() else []
@@ -153,17 +77,12 @@ def load_expected():
         if not path.exists():
             sys.exit(f"missing: {path.relative_to(ROOT)}")
         for n, line in enumerate(read(path), 1):
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            required = True
-            if line.startswith("maybe "):
-                required = False
-                line = line[len("maybe "):].strip()
-            parts = line.split(None, 2)
-            if len(parts) != 3 or parts[0] not in STAGES:
-                sys.exit(f"{path.relative_to(ROOT)}:{n}: cannot read line: {line}")
-            expected.append((parts[0], parts[1], re.compile(parts[2]), required))
+            try:
+                e = parse_expected(line, STAGES, f"{path.relative_to(ROOT)}:{n}")
+            except ValueError as err:
+                sys.exit(str(err))
+            if e is not None:
+                expected.append(e)
     return expected
 
 
@@ -187,29 +106,21 @@ def main() -> int:
                 problems.append(f"did not finish: {stage} {name}")
 
     # 2. New findings, and expected findings that are missing.
-    used = set()
-    counts = {s: [0, 0] for s in STAGES}  # [findings, unexpected]
-    for stage in STAGES:
-        for prog, p in sorted(actual[stage].items()):
-            for f in sorted(p["findings"]):
-                counts[stage][0] += 1
-                hit = [i for i, (s, pr, rx, _) in enumerate(expected)
-                       if s == stage and pr == prog and rx.fullmatch(f)]
-                if hit:
-                    used.update(hit)
-                else:
-                    counts[stage][1] += 1
-                    problems.append(f"new finding: {stage} {prog} {f}")
-    for i, (s, pr, rx, required) in enumerate(expected):
-        if required and i not in used:
-            problems.append(f"expected but not found: {s} {pr} {rx.pattern}")
+    found = {s: {prog: p["findings"] for prog, p in actual[s].items()} for s in STAGES}
+    new, missing, _ = compare(found, expected)
+    counts = {s: [sum(len(f) for f in found[s].values()), 0] for s in STAGES}  # [findings, unexpected]
+    for stage, prog, f in new:
+        counts[stage][1] += 1
+        problems.append(f"new finding: {stage} {prog} {f}")
+    for e in missing:
+        problems.append(f"expected but not found: {e.stage} {e.program} {e.pattern}")
 
     print("")
     print("============================ RESULTS ============================")
     for s in STAGES:
         total, new = counts[s]
-        req = sum(1 for e in expected if e[0] == s and e[3])
-        may = sum(1 for e in expected if e[0] == s and not e[3])
+        req = sum(1 for e in expected if e.stage == s and e.required)
+        may = sum(1 for e in expected if e.stage == s and not e.required)
         rev = sum(1 for p in actual[s].values() for f in p["findings"] if f.startswith("REVIEW"))
         print(f"  {s:<9} {total:2d} findings  (expected: {req} required"
               f"{f' + {may} maybe' if may else ''}; new: {new})"
