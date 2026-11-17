@@ -6,17 +6,21 @@ This page lists what the tests find, and says for each finding if it is in the
 
 Why there are two places: the thesis version of AutoFuzz tested a PC copy of the
 firmware logic (`test_common.c`), not the firmware files themselves. The copy is
-close to the firmware, but not the same. The hand-written fuzzers in
-`Tests/fuzz_manual/` link the real `Core/Src/protocol.c` and `servo.c`.
+close to the firmware, but not the same. Since milestone M4, AutoFuzz also tests
+the real `Core/Src/protocol.c` and `servo.c` (the root `autofuzz.yaml`), compiled
+**without** `UNIT_TEST`, like on the board. The hand-written fuzzers in
+`Tests/fuzz_manual/` also link the real files (with `UNIT_TEST`).
 
 ## Summary
 
-| Finding | In the legacy copy | In the real firmware | Status |
-|---|---|---|---|
-| Bug 1: stack buffer overflow (command of 1024+ characters) | yes | **no** | only in the copy |
-| Bug 2: signed integer overflow in `angle + step` | yes (`test_common.c:162`) | **yes** (`Core/Src/protocol.c:159`) | **real bug** |
-| 4 failing unit tests (spaces around `B`, a 4th field, step 0, negative step) | yes | **yes** | **real behaviour** |
-| DMA length overflow in `fuzz_uart_dma` (old) | – | **no** | was a harness mistake, fixed |
+| Finding | In the legacy copy | In the real firmware | Found by AutoFuzz on the real code (M4) | Status |
+|---|---|---|---|---|
+| Bug 1: stack buffer overflow (command of 1024+ characters) | yes | **no** | no (as expected) | only in the copy |
+| Bug 2: signed integer overflow in `angle + step` | yes (`test_common.c:162`) | **yes** (`Core/Src/protocol.c:159`) | **yes**, also through `Protocol_ProcessCommand` | **real bug** |
+| `assert` in `Servo_Ramp` for step 0 or step > 45 | – (the copy has no assert) | **yes** (`Core/Src/servo.c:40`) | **yes** | **real behaviour** |
+| 4 failing unit tests (spaces around `B`, a 4th field, step 0, negative step) | yes | **yes** | – (unit tests only) | **real behaviour** |
+| DMA length overflow in `fuzz_uart_dma` (old) | – | **no** | – (`main.c` is not covered) | was a harness mistake, fixed |
+| `main.c` does not compile: `dmaBuffer[64]` vs `dmaBuffer[1024]` | – | **yes** (`Core/Inc/main.h:39`, `protocol_defs.h:10`) | – (seen by the compiler, see below) | **to check in CubeIDE** |
 
 The full list that `make test` checks is in
 [`Tests/expected_findings.txt`](../Tests/expected_findings.txt).
@@ -85,6 +89,8 @@ of `angle` and `step` before the addition, or add as `unsigned`:
 | `deterministic_edge_ComputeChecksumFromNumbers` (generated) | copy, `test_common.c:162` | `signed integer overflow: -2147483648 + -2147483648` |
 | `random_fuzz_ComputeChecksumFromNumbers` (generated, < 1 s) | copy, `test_common.c:162` | random values, for example `1760837426 + 536933439` |
 | `Tests/fuzz_manual`: `fuzz_protocol_cmd`, `fuzz_protocol_session` | **real**, `Core/Src/protocol.c:159` | `signed integer overflow: 2147483647 + 1` |
+| AutoFuzz `deterministic_edge_ComputeChecksumFromNumbers`, `random_fuzz_ComputeChecksumFromNumbers` (stage `real-edge`/`real-fuzz`) | **real**, `Core/Src/protocol.c:159` | `signed integer overflow` |
+| AutoFuzz `deterministic_edge_Protocol_ProcessCommand` (seed `(2147483647,1,0)` from `autofuzz.yaml`) | **real**, `Core/Src/protocol.c:159` | the same bug, reached through the real command parser |
 
 Real output from `fuzz_protocol_cmd`:
 
@@ -118,8 +124,18 @@ assert(step != 0 && step <= SERVO_MAX_STEP);
 ```
 
 So the firmware stops at the `assert` (when asserts are on, that is, `NDEBUG` is not
-defined). The PC builds use `-DUNIT_TEST`, and there `Servo_Ramp` just returns,
-so the fuzzers do not stop here.
+defined). The hand-written fuzzers and the legacy copy use `-DUNIT_TEST`, and there
+`Servo_Ramp` just returns, so they do not stop here.
+
+AutoFuzz on the real code (M4) compiles `servo.c` **without** `UNIT_TEST`, so it
+reaches the assert. Both `deterministic_edge_Servo_Ramp` and `random_fuzz_Servo_Ramp`
+report:
+
+```
+servo.c:40: void Servo_Ramp(uint8_t *, uint8_t, uint8_t): Assertion `step != 0 && step <= SERVO_MAX_STEP' failed.
+```
+
+`Tests/check_results.py` records it as `ASSERT servo.c:40 in Servo_Ramp`.
 
 Whether these 4 behaviours are bugs or acceptable is a design choice. The tests
 record that the code does not do what the tests expect.
@@ -140,8 +156,71 @@ defensive code.
 
 ---
 
-## What changes later
+## AutoFuzz on the real firmware (M4)
 
-From milestone M4 (see [ROADMAP.md](ROADMAP.md)), AutoFuzz will test
-`Core/Src` directly. Then bug 2 and the `Servo_Ramp` assert should be found
-there too, and bug 1 should **not** be found. That will confirm this page.
+The root [`autofuzz.yaml`](../autofuzz.yaml) points AutoFuzz at
+`Core/Src/protocol.c` and `Core/Src/servo.c`:
+
+- They are compiled **without** `-DUNIT_TEST`, so the code is the same as on the board.
+- `#include "stm32f1xx_hal.h"` finds the fake HAL in `autofuzz/fakes/stm32f1_hal/`
+  (types and declarations only).
+- AutoFuzz generates stubs for what the files use but do not define:
+  `HAL_UART_Transmit`, `HAL_TIM_PWM_Start`, `HAL_Delay`, `huart2`, `htim2`
+  (`autofuzz-out/stubs/stubs.c`).
+
+Result, as this page predicted before M4: bug 2 and the `Servo_Ramp` assert are
+found in the real code. Bug 1 is **not** found. No function is skipped, and no
+finding needs review.
+
+A finding is marked **needs review** (`REVIEW (...)` in the results), and is not
+counted as a firmware bug, when the test may have caused it:
+
+- its top stack frame is in a generated harness, a stub or a fake header; or
+- it is a NULL-pointer crash, and the test passed NULL for a pointer argument.
+  A pointer parameter (other than `char *`) with no `harness.setup` entry gets NULL.
+
+`Tests/autofuzz_selftest/` shows both cases.
+
+---
+
+## Found while doing M4: `main.c` and `DMA_BUFFER_SIZE`
+
+`DMA_BUFFER_SIZE` is defined twice, with different values:
+
+- `Core/Inc/main.h:39`: `#define DMA_BUFFER_SIZE 64`. `main.h` also declares
+  `extern uint8_t dmaBuffer[DMA_BUFFER_SIZE];`, so the declaration says 64.
+- `Core/Inc/protocol_defs.h:10`: `#define DMA_BUFFER_SIZE 1024`.
+
+`main.c` includes `main.h` first and `protocol.h` after it. Then line 60,
+`uint8_t dmaBuffer[DMA_BUFFER_SIZE];`, defines the buffer with 1024 bytes.
+
+The PC compilers reject this, using the real HAL headers and the `.ioc` defines:
+
+```
+clang: Core/Src/main.c:60:9: error: redefinition of 'dmaBuffer' with a different type: 'uint8_t [1024]' vs 'uint8_t [64]'
+gcc:   Core/Src/main.c:60:9: error: conflicting types for 'dmaBuffer'
+```
+
+`protocol.c` and `servo.c` compile, with only a warning that the macro is
+redefined. They do not use `dmaBuffer`.
+
+**To check in STM32CubeIDE:** does the project build with these files? If it
+does, the IDE project must differ from git. If it does not, one value of
+`DMA_BUFFER_SIZE` should be removed. `Core/` was not changed in M4.
+
+---
+
+## Not covered
+
+AutoFuzz does **not** test `Core/Src/main.c`. That includes the UART/DMA receive
+path (`HAL_UART_IdleCallback` → `ProcessUartData` → `Protocol_ProcessCommand`),
+`main()`, and the clock, GPIO, timer and UART setup. These need the real
+registers (`TIM2`, `USART2`, `huart2.Instance->CR1`, ...), and `main()` never
+returns. `main.c` also does not compile at the moment (see above).
+
+The receive path is tested only by the hand-written fuzzer
+`Tests/fuzz_manual/fuzz_uart_dma.c`. It uses a **copy** of the DMA idle-callback
+logic from `main.c`, so a change in `main.c` must be copied there by hand.
+
+Also not covered: the CubeMX/HAL files in `Drivers/` and `Core/Src/stm32f1xx_*.c`
+(library and interrupt code).

@@ -3,7 +3,7 @@
 ##   make deps    check that the needed tools are installed
 ##   make build   unit tests + `autofuzz build` + hand-written fuzzers
 ##   make test    unit + edge + short fuzzing, compared with the expected
-##                findings (about 3 minutes; exit 0 = as expected)
+##                findings (about 4 minutes; exit 0 = as expected)
 ##   make check-determinism  generate twice, the outputs must be identical
 ##   make fuzz    longer fuzzing of all fuzzers (FUZZ_MAX_SECS each)
 ##   make clean   remove everything that build/test/fuzz created

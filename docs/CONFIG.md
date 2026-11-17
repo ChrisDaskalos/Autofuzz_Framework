@@ -100,11 +100,55 @@ If one of the lines calls the function under test itself (here:
 `reset_ctx`), the lines are left out for that function. Only the
 variable is declared.
 
+### Pointer parameters without `harness.setup`
+
+A pointer parameter (other than `char *`) with no `harness.setup` entry gets
+**NULL**. Each generated file then says so in a comment
+(`/* AUTOFUZZ-NULL-ARGS: argument 1 (const int *) */`). If the function crashes
+on that NULL, the finding is marked **needs review (NULL argument)**, not
+counted as a firmware bug. To test the function for real, add a setup entry
+for the pointed-to type. Example from the root `autofuzz.yaml`:
+
+```yaml
+    - type: uint8_t          # Servo_Ramp(uint8_t *currentAngle, ...)
+      var: current_angle
+      lines:
+        - current_angle = SERVO_DEFAULT_ANGLE;
+```
+
+A `char *` parameter gets a writable copy of each text input (the function
+may change it, as `strtok` does). A `const char *` gets the text as it is.
+
+## Firmware: fake headers, stubs, skipped code, needs review
+
+- **Fake headers** (`fake_include_dirs`) replace headers that only work on the
+  board, for example the HAL.
+- **Stubs**: AutoFuzz writes `stubs/stubs.c` with a definition for every
+  function and global that your sources use but do not define, such as
+  `HAL_UART_Transmit` and `huart2`. A stub function counts its calls
+  (`autofuzz_calls_<name>`) and returns 0 (`HAL_OK`, NULL, a zeroed struct).
+  If a stub returns a pointer, AutoFuzz prints a warning: it is always NULL,
+  so a finding after a call to it needs review.
+- **Skipped functions**: functions that cannot run on a PC get no test. They are
+  listed as `SKIPPED: <function> (<file>:<line>): <reason>`. A function is skipped
+  if it has inline assembly, casts an integer constant to a pointer (register
+  access, for example `*(uint32_t *)0x40010810 = 1`), or never returns (an
+  endless loop with no `break`, `return` or `goto`, as in `main`). To leave out
+  other functions, use `functions.exclude`.
+- **Needs review**: a finding whose top stack frame is in a generated harness,
+  a stub or a fake header, or a NULL crash on a NULL argument, gets the line
+  `AUTOFUZZ: NEEDS REVIEW (<reason>): ...` in the log. It may be caused by the
+  test, so it is not counted as a firmware bug.
+
+[`Tests/autofuzz_selftest/`](../Tests/autofuzz_selftest/) has one example of each.
+
 ## What is in `output_dir`
 
 ```
 autofuzz-out/
   gen/        deterministic_edge_<fn>.c and random_fuzz_<fn>.c
+              (and skipped.txt: the skipped functions with the reason)
+  stubs/      stubs.c: stubs for what the sources use but do not define
   build/      object files of your sources
   bin/        the test programs (run one by hand to repeat it)
   logs/       edge.log and fuzz.log
@@ -115,14 +159,18 @@ autofuzz-out/
 `autofuzz clean` removes these folders. `autofuzz run --fresh` removes
 only `logs/`, `crashes/` and `corpus/` first.
 
-## Example: the legacy thesis project
+## Examples
 
-[`Tests/legacy_thesis/autofuzz.yaml`](../Tests/legacy_thesis/autofuzz.yaml)
-is a complete, commented example. The root `make test` runs it:
+- [`autofuzz.yaml`](../autofuzz.yaml) in the repository root: the **real servo
+  firmware** (`Core/Src`), with the fake HAL and `harness.setup` entries.
+  `python3 -m autofuzz run`
+- [`Tests/legacy_thesis/autofuzz.yaml`](../Tests/legacy_thesis/autofuzz.yaml):
+  the legacy thesis example (the PC copy `test_common.c`).
+  `python3 -m autofuzz run --config Tests/legacy_thesis/autofuzz.yaml`
+- [`Tests/autofuzz_selftest/autofuzz.yaml`](../Tests/autofuzz_selftest/autofuzz.yaml):
+  a tiny project with skipped functions, stubs and test-caused crashes.
 
-```bash
-python3 -m autofuzz run --config Tests/legacy_thesis/autofuzz.yaml
-```
+The root `make test` runs all three.
 
 ## Same input, same output
 

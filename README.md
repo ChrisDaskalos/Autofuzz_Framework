@@ -13,10 +13,10 @@ so memory errors and integer overflows are reported with a file and line.
 The example target is firmware for an STM32F103 that moves a servo motor,
 using commands it receives over UART.
 
-> **Legacy note.** Today AutoFuzz tests a PC copy of the firmware logic
-> (`Tests/legacy_thesis/test_common.c`), not the firmware files in `Core/Src`.
-> Hand-written fuzzers in `Tests/fuzz_manual/` test the real firmware.
-> [docs/ROADMAP.md](docs/ROADMAP.md) explains the plan to test `Core/Src` directly.
+AutoFuzz tests the real firmware files `Core/Src/protocol.c` and `servo.c`
+(root [`autofuzz.yaml`](autofuzz.yaml)), compiled as on the board, with a fake
+HAL and generated stubs. The thesis version tested a PC copy of the logic; that
+copy is kept as the legacy example in `Tests/legacy_thesis/`.
 
 ## Quick start
 
@@ -24,7 +24,7 @@ With **Docker**:
 
 ```bash
 docker build -t autofuzz .
-docker run --rm autofuzz          # runs `make test` (about 3 minutes)
+docker run --rm autofuzz          # runs `make test` (about 4 minutes)
 ```
 
 Or on **Ubuntu 24.04** (first install the tools:
@@ -45,7 +45,7 @@ Ubuntu 20.04 / Python 3.8 works too: see [docs/INSTALL.md](docs/INSTALL.md).
 ```bash
 pip install .          # gives the `autofuzz` command
 cd my-project
-autofuzz init          # writes autofuzz.yaml; list your .c files in it
+autofuzz init          # writes autofuzz.yaml; fill in the 3 REQUIRED keys
 autofuzz run           # checks the tools, generates, compiles, runs
 ```
 
@@ -59,10 +59,15 @@ when the findings are exactly the ones in
 
 ```
 ============================ RESULTS ============================
-  unit     5 findings  (expected: 5 required; new: 0)
-  edge     2 findings  (expected: 2 required; new: 0)
-  fuzz     1 findings  (expected: 1 required + 1 maybe; new: 0)
-  manual   2 findings  (expected: 2 required; new: 0)
+  unit       5 findings  (expected: 5 required; new: 0)
+  edge       2 findings  (expected: 2 required; new: 0)
+  fuzz       1 findings  (expected: 1 required + 1 maybe; new: 0)
+  self-edge  1 findings  (expected: 1 required; new: 0)  [1 need review, not firmware bugs]
+  self-fuzz  2 findings  (expected: 2 required; new: 0)  [2 need review, not firmware bugs]
+  real-edge  3 findings  (expected: 3 required; new: 0)
+  real-fuzz  2 findings  (expected: 2 required + 1 maybe; new: 0)
+  skipped    3 findings  (expected: 3 required; new: 0)
+  manual     2 findings  (expected: 2 required; new: 0)
   Expected list: Tests/expected_findings.txt   Logs: Tests/results/
 =================================================================
 All results as expected
@@ -71,9 +76,14 @@ All results as expected
 Exit code 0 means "as expected". Exit code 1 and a last line starting with
 `UNEXPECTED:` means something is different (a new bug, or a known bug that is gone).
 
+`edge`/`fuzz` are the legacy example, `real-*` the real firmware, `self-*` and
+`skipped` the AutoFuzz self-test (its findings are caused on purpose).
+
 **What was found:** one real bug in the firmware (a signed integer overflow
-in the checksum, `Core/Src/protocol.c:159`), four protocol behaviours that the
-unit tests do not accept, and one bug that exists only in the legacy copy.
+in the checksum, `Core/Src/protocol.c:159`), an `assert` in `Servo_Ramp` that a
+step of 0 reaches, four protocol behaviours that the unit tests do not accept,
+and one bug that exists only in the legacy copy. `main.c` (the UART/DMA receive
+path) is not tested by AutoFuzz.
 Details: [docs/FINDINGS.md](docs/FINDINGS.md).
 
 ## Documents
