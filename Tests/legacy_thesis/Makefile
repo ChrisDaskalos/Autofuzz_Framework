@@ -59,9 +59,10 @@ help:
 > @echo "  FUZZ_CC       - Compiler for fuzzers (default: clang)"
 
 # Generate autofuzz harnesses
-_autofuzz.stamp: $(STUB_SRC) autofuzz/config.py autofuzz/scanner.py autofuzz/generator.py autofuzz/main.py
+AUTOFUZZ_PY := $(wildcard ../../autofuzz/*.py)
+_autofuzz.stamp: $(STUB_SRC) $(AUTOFUZZ_PY)
 > @echo ">>> Generating AutoFuzz harnesses..."
-> PYTHONPATH=$(CURDIR) STUB_SRCS="$(STUB_SRCS)" python3 -m autofuzz.main
+> PYTHONPATH=$(abspath ../..) STUB_SRCS="$(STUB_SRCS)" python3 -m autofuzz.main
 > @touch $@
 
 # Compile rules for object files
