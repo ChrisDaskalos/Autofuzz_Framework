@@ -244,7 +244,7 @@ every file with `-fsanitize=fuzzer`.
 
 | Fuzzer | Before the fix | After the fix |
 |---|---|---|
-| real `random_fuzz_Protocol_ProcessCommand` | Bug 2 (`protocol.c:159`) only sometimes | Bug 2 in 5 of 5 runs |
+| real `random_fuzz_Protocol_ProcessCommand` | Bug 2 (`protocol.c:159`) only sometimes | Bug 2 in 5 of 5 local runs; a GitHub runner missed it once, so it stays `maybe` |
 | legacy `random_fuzz_Protocol_ProcessCommand` | Bug 1 only sometimes | always a finding: Bug 1 (3 runs) or Bug 2 at `test_common.c:94` (2 runs) |
 | ringbuf `random_fuzz_cli_run`, `random_fuzz_cli_execute` | never, also not in 300 s with a dictionary | the off-by-one in about 1 s, 5 of 5 runs |
 

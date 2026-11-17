@@ -95,7 +95,8 @@ def parse(lines: Iterable[str], program: Optional[str] = None) -> Dict[str, dict
     # when there is no such report (e.g. a plain abort or trap).
     for p in progs.values():
         if any(re.match(r"(REVIEW \(.*?\) )?(ASAN|UBSAN|ASSERT)", f) for f in p["findings"]):
-            p["findings"].discard("LIBFUZZER deadly signal")
+            p["findings"] = {f for f in p["findings"]
+                             if not re.fullmatch(r"(REVIEW \(.*?\) )?LIBFUZZER deadly signal", f)}
     return progs
 
 

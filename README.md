@@ -82,7 +82,7 @@ for the hand-written tests:
   self-fuzz       3 findings  (expected: 3 required; new: 0)  [3 need review, not firmware bugs]
   self-skipped    3 findings  (expected: 3 required; new: 0)
   real-edge       3 findings  (expected: 3 required; new: 0)
-  real-fuzz       3 findings  (expected: 3 required; new: 0)
+  real-fuzz       3 findings  (expected: 2 required + 1 maybe; new: 0)
   real-skipped    0 findings  (expected: 0 required; new: 0)
   ex-edge         1 findings  (expected: 1 required; new: 0)
   ex-fuzz         2 findings  (expected: 2 required; new: 0)

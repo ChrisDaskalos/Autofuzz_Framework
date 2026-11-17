@@ -99,7 +99,9 @@ baseline:
   - 'edge deterministic_edge_ComputeChecksumFromNumbers UBSAN signed-integer-overflow protocol\.c:159'
   - 'fuzz random_fuzz_ComputeChecksumFromNumbers UBSAN signed-integer-overflow protocol\.c:159'
   - 'edge deterministic_edge_Protocol_ProcessCommand UBSAN signed-integer-overflow protocol\.c:159'
-  - 'fuzz random_fuzz_Protocol_ProcessCommand UBSAN signed-integer-overflow protocol\.c:159'
+  # Through the input path the fuzzer needs a long number; in 10 s it finds it
+  # in most runs, but not in all (a GitHub runner missed it once): "maybe".
+  - 'maybe fuzz random_fuzz_Protocol_ProcessCommand UBSAN signed-integer-overflow protocol\.c:159'
   # Step 0 or step > SERVO_MAX_STEP reaches the assert in Servo_Ramp
   - 'edge deterministic_edge_Servo_Ramp ASSERT servo\.c:40 in Servo_Ramp'
   - 'fuzz random_fuzz_Servo_Ramp ASSERT servo\.c:40 in Servo_Ramp'
