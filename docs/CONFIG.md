@@ -28,6 +28,7 @@ To start, you must fill in 3 keys: `sources`, `include_dirs` and `harness.includ
 | Key | Type | Default | What it does |
 |---|---|---|---|
 | `sources` | list of paths | (none, required) | The `.c` files to test. AutoFuzz writes tests for every non-static function defined in them, and compiles and links them into every test program. |
+| `fake_include_dirs` | list of paths | `[]` | Folders with fake headers, for example a fake HAL. They come **before** `include_dirs` on the include path, so a fake `stm32f1xx_hal.h` replaces the real one. `builtin:stm32f1_hal` is the fake STM32F1 HAL in [`autofuzz/fakes/stm32f1_hal/`](../autofuzz/fakes/stm32f1_hal/): HAL types and declarations only, no register addresses. A finding whose top stack frame is in a fake header is marked **needs review**. |
 | `include_dirs` | list of paths | `[]` (fill in to start) | Folders with the headers your sources include. Passed as `-I`, in this order. |
 | `defines` | list | `[]` | Preprocessor defines, passed as `-D`. `UNIT_TEST` or `BUF=64`. |
 | `cflags` | list | `[-std=c11]` | More compiler flags. |

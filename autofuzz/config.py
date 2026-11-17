@@ -10,8 +10,9 @@ merged on top of it:
     (set `limits.default_string_seeds: false` to drop the defaults);
   * every other key REPLACES the default value.
 
-Paths in the YAML (sources, include_dirs, output_dir) are relative to the
-folder that contains the YAML file.
+Paths in the YAML (sources, fake_include_dirs, include_dirs, output_dir)
+are relative to the folder that contains the YAML file. In fake_include_dirs,
+`builtin:<name>` means the fake headers shipped in autofuzz/fakes/<name>/.
 """
 import fnmatch
 import re
@@ -27,6 +28,8 @@ except ImportError:  # pragma: no cover - checked again by `autofuzz check`
 PACKAGE_DIR = Path(__file__).resolve().parent
 DEFAULTS_FILE = PACKAGE_DIR / "defaults.yaml"
 DEFAULT_CONFIG_NAME = "autofuzz.yaml"
+FAKES_DIR = PACKAGE_DIR / "fakes"
+BUILTIN_PREFIX = "builtin:"
 
 
 class ConfigError(Exception):
@@ -43,6 +46,7 @@ SETUP_LIST = "list of setup entries"
 
 SCHEMA: Dict[str, Any] = {
     "sources": STR_LIST,
+    "fake_include_dirs": STR_LIST,
     "include_dirs": STR_LIST,
     "defines": STR_LIST,
     "cflags": STR_LIST,
@@ -236,6 +240,7 @@ class Config:
         self.base_dir = path.parent if path else Path.cwd()
         d = data
         self.sources = [self._abs(s) for s in d.get("sources") or []]
+        self.fake_include_dirs = [self._fake_dir(str(s)) for s in d.get("fake_include_dirs") or []]
         self.include_dirs = [self._abs(s) for s in d.get("include_dirs") or []]
         self.defines = [str(x) for x in d.get("defines") or []]
         self.cflags = [str(x) for x in d.get("cflags") or []]
@@ -270,11 +275,22 @@ class Config:
         q = Path(str(p))
         return q if q.is_absolute() else (self.base_dir / q)
 
+    def _fake_dir(self, entry: str) -> Path:
+        if entry.startswith(BUILTIN_PREFIX):
+            name = entry[len(BUILTIN_PREFIX):]
+            path = FAKES_DIR / name
+            if not name or not path.is_dir():
+                have = ", ".join(sorted(BUILTIN_PREFIX + p.name for p in FAKES_DIR.iterdir() if p.is_dir()))
+                raise ConfigError(f"{self.path}: fake_include_dirs: unknown '{entry}'. Built-in fakes: {have}.")
+            return path
+        return self._abs(entry)
+
     # --- helpers used by the rest of the tool -----------------------------
     def clang_args(self) -> List[str]:
-        """-I / -D / extra flags, in the order given in the YAML."""
+        """-I / -D / extra flags. Fake headers come first on the include path."""
         args = list(self.cflags)
         args += [f"-D{d}" for d in self.defines]
+        args += [f"-I{p}" for p in self.fake_include_dirs]
         args += [f"-I{p}" for p in self.include_dirs]
         return args
 
@@ -323,9 +339,9 @@ def load(path: Optional[Union[str, Path]] = None, require_sources: bool = True) 
         if missing:
             raise ConfigError(f"{cfg_path}: source file not found: {', '.join(missing)} "
                               f"(paths are relative to {cfg.base_dir})")
-        bad = [str(p) for p in cfg.include_dirs if not p.is_dir()]
+        bad = [str(p) for p in cfg.fake_include_dirs + cfg.include_dirs if not p.is_dir()]
         if bad:
-            raise ConfigError(f"{cfg_path}: include_dirs folder not found: {', '.join(bad)}")
+            raise ConfigError(f"{cfg_path}: include_dirs / fake_include_dirs folder not found: {', '.join(bad)}")
     return cfg
 
 

@@ -5,6 +5,7 @@
 # is added to the list below. See docs/CONFIG.md.
 
 sources: []
+fake_include_dirs: []
 include_dirs: []
 defines: []
 cflags: [-std=c11]

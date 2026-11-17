@@ -22,6 +22,15 @@ sources: []
 #     - tests/fakes
 include_dirs: []
 
+# Optional. Folders with fake headers (for example a fake HAL). They come
+# BEFORE include_dirs, so they replace the real headers of the same name.
+# `builtin:stm32f1_hal` is the fake STM32F1 HAL that comes with AutoFuzz.
+# Example:
+#   fake_include_dirs:
+#     - builtin:stm32f1_hal
+#     - tests/fakes
+fake_include_dirs: []
+
 # Optional. Preprocessor defines (passed as -D).
 # Example:
 #   defines:

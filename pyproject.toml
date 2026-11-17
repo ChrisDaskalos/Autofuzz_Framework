@@ -26,4 +26,4 @@ autofuzz = "autofuzz.__main__:main"
 packages = ["autofuzz"]
 
 [tool.setuptools.package-data]
-autofuzz = ["*.yaml", "rt/*.h"]
+autofuzz = ["*.yaml", "rt/*.h", "fakes/*/*.h"]
