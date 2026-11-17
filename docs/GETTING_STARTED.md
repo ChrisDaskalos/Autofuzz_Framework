@@ -192,7 +192,110 @@ printf 'fill 8;pop;push 1' > bug.txt
 After you fix the bug, run `autofuzz run --fresh` again: the line should say
 `ok`.
 
-## 7. Keep it running
+## 7. Common errors and how to fix them
+
+These are real messages, copied from runs on a broken copy of
+`examples/ringbuf_cli` (long paths shortened to `.../`). An error in
+`autofuzz.yaml` stops AutoFuzz with exit code 2 before anything is compiled.
+
+**`sources` is still empty** (right after `autofuzz init`):
+
+```
+autofuzz: error: .../autofuzz.yaml: 'sources' is empty. List the .c files to test, e.g.
+  sources:
+    - src/parser.c
+```
+
+Fix: fill in the 3 REQUIRED keys (step 2).
+
+**A typo in a key name:**
+
+```
+autofuzz: error: .../autofuzz.yaml: unknown key 'include_dir'. Did you mean 'include_dirs'? Allowed keys here: cflags, compiler, defines, fake_include_dirs, functions, fuzz, harness, include_dirs, limits, output_dir, sources.
+```
+
+Fix: use the suggested name. Unknown keys are always an error, so a typo
+cannot be silently ignored.
+
+**A wrong path:**
+
+```
+autofuzz: error: .../autofuzz.yaml: source file not found: .../src/clii.c (paths are relative to .../examples/ringbuf_cli)
+autofuzz: error: .../autofuzz.yaml: include_dirs / fake_include_dirs folder not found: .../inc
+```
+
+Fix: paths are relative to the folder of `autofuzz.yaml`, not to the folder
+you run the command in.
+
+**A header is not found** (the folder exists, but it is the wrong one):
+
+```
+autofuzz: error: could not compile .../src/ringbuf.c:
+.../src/ringbuf.c:7:10: fatal error: 'ringbuf.h' file not found
+#include "ringbuf.h"
+         ^~~~~~~~~~~
+```
+
+Fix: add the folder that contains `ringbuf.h` to `include_dirs`. For a
+header that only exists on the target (a HAL, `stm32f1xx.h`), use a fake
+header in `fake_include_dirs` (see [CONFIG.md](CONFIG.md)).
+
+**No function to test:**
+
+```
+autofuzz: left out by functions.include/exclude -> cli_execute, cli_output, cli_parse_uint, cli_run, ringbuf_clear, ...
+autofuzz: no target functions found in 'sources'.
+```
+
+Fix: the patterns in `functions.include` match no function (here
+`[Parser_*]`). Leave `include` empty to test every non-static function.
+`static` functions are never tested directly; they are tested through the
+functions that call them.
+
+**A tool is missing** (`autofuzz check`, also run by `autofuzz run`):
+
+```
+autofuzz: some tools are missing:
+  MISSING  clang-99 (the C compiler set by 'compiler:' in autofuzz.yaml)
+           install:  install clang-99, or set 'compiler: clang' in autofuzz.yaml
+Install them and run the command again. (docs/INSTALL.md has the full list.)
+```
+
+Fix: run the install command it prints. [INSTALL.md](INSTALL.md) has them all.
+
+**Not errors, but read them** (from the AutoFuzz self-test,
+`Tests/autofuzz_selftest`):
+
+```
+autofuzz: SKIPPED: cpu_nop (src/selftest.c:64): inline assembly (runs only on the target CPU)
+autofuzz: SKIPPED: led_on (src/selftest.c:58): casts an integer constant to a pointer (hardware register access)
+autofuzz: SKIPPED: run_forever (src/selftest.c:70): never returns (endless loop with no break or return)
+```
+
+These functions cannot run on a PC, so they get no tests (list in
+`autofuzz-out/gen/skipped.txt`). Exclude them with `functions.exclude` to
+silence the message, or move the hardware access into a separate function.
+
+```
+autofuzz: WARNING: stub board_name() returns a pointer (always NULL). A finding after a call to board_name needs review.
+```
+
+Your code calls a function that AutoFuzz had to stub. The stub returns NULL.
+If your code then uses that pointer, the crash is caused by the stub. Fix:
+add the real `.c` file that defines it to `sources`, or a fake in
+`fake_include_dirs`.
+
+```
+AUTOFUZZ: NEEDS REVIEW (NULL argument: the test passed NULL for argument 1 (const int *)): SUMMARY: UndefinedBehaviorSanitizer: nullptr-with-offset .../src/selftest.c:48:12 in
+AUTOFUZZ: NEEDS REVIEW (top frame in fake header: board.h): SUMMARY: UndefinedBehaviorSanitizer: integer-divide-by-zero .../fakes/board.h:19:14 in
+```
+
+The crash is probably caused by the test, not by your code. Either AutoFuzz
+passed NULL for a pointer parameter, or the crash is inside a fake header or
+stub. Fix: add a `harness.setup` entry for that type (step 3), or fix the fake.
+If your function really must handle NULL, it is a real bug after all.
+
+## 8. Keep it running
 
 - Commit `autofuzz.yaml`, not `autofuzz-out/`.
 - In CI, `autofuzz run` exits 0 if nothing was found, 1 if something was
