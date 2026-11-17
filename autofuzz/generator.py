@@ -13,6 +13,7 @@ import re
 import itertools
 
 from .config import Config, SetupEntry
+from .review import NULL_ARGS_TAG
 
 # ─────────────────────────────────────────────────────────────────────
 # Type detection helpers
@@ -390,6 +391,16 @@ def _generate_test_combinations(seeds_per_param: List[List[str]],
 # ─────────────────────────────────────────────────────────────────────
 # Edge harness generation (CMocka-based deterministic tests)
 # ─────────────────────────────────────────────────────────────────────
+def _null_args_line(param_types: Sequence[str], setups: Dict[int, SetupEntry]) -> List[str]:
+    """A pointer parameter (not char *) with no harness.setup entry gets NULL.
+    Say so in the harness; the runner then marks a NULL crash as needs review."""
+    nulls = [f"argument {i + 1} ({pt})" for i, pt in enumerate(param_types)
+             if i not in setups and _is_pointer(pt) and not _is_string(pt)]
+    if not nulls:
+        return []
+    return [f"/* {NULL_ARGS_TAG} {', '.join(nulls)} */", ""]
+
+
 def _includes(cfg: Config) -> List[str]:
     return [f'#include "{h}"' for h in cfg.harness_includes]
 
@@ -407,6 +418,7 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
     ] + _includes(cfg) + ['']
 
     setups = _setups(func, param_types, cfg)
+    out += _null_args_line(param_types, setups)
 
     # Generate seed arrays for each parameter
     seeds_per_param: List[List[str]] = []
@@ -521,6 +533,7 @@ def _emit_libfuzzer_harness_src(func: str, param_types: Sequence[str], cfg: Conf
     ]
 
     setups = _setups(func, param_types, cfg)
+    out += _null_args_line(param_types, setups)
     has_strings = any(_is_string(pt) for pt in param_types)
 
     # Generic string-based fuzzing

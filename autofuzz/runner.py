@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .config import Config, PACKAGE_DIR
+from . import review
 
 SUBDIRS = ("gen", "stubs", "build", "bin", "logs", "crashes", "corpus")
 
@@ -40,7 +41,7 @@ RUN_ENV = {
     "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=1:report_error_type=1",
 }
 
-SUMMARY_RE = re.compile(r"^SUMMARY: |^\[  FAILED  \] \w+\s*$")
+SUMMARY_RE = re.compile(r"^SUMMARY: |^\[  FAILED  \] \w+\s*$|: Assertion `.*' failed\.$")
 
 
 def say(msg: str = "") -> None:
@@ -147,6 +148,12 @@ class Layout:
         self.corpus = out / "corpus"
 
 
+def test_dirs(cfg: Config, L: "Layout") -> List[Tuple[str, Path]]:
+    """Folders with test code: a finding whose top frame is here needs review."""
+    dirs = [("generated harness", L.gen), ("generated stub", L.stubs), ("AutoFuzz runtime", PACKAGE_DIR / "rt")]
+    return dirs + [("fake header", d) for d in cfg.fake_include_dirs]
+
+
 def generate(cfg: Config, out: Path) -> List[str]:
     from .main import generate as gen  # imports libclang; only after check_tools
     from . import stubgen
@@ -226,7 +233,8 @@ def build(cfg: Config, out: Path, targets: List[str]) -> Dict[str, List[str]]:
 # ---------------------------------------------------------------------------
 # 4. Run
 # ---------------------------------------------------------------------------
-def _run_logged(cmd: List[str], cwd: Path, log, header: str, timeout: int) -> Tuple[int, List[str]]:
+def _run_logged(cmd: List[str], cwd: Path, log, header: str, timeout: int,
+                review_ctx: Optional[Tuple[str, List[Tuple[str, Path]]]] = None) -> Tuple[int, List[str]]:
     env = dict(os.environ)
     env.update(RUN_ENV)
     log.write(f"\n{header}\n")
@@ -241,16 +249,28 @@ def _run_logged(cmd: List[str], cwd: Path, log, header: str, timeout: int) -> Tu
         text += f"\nautofuzz: TIMEOUT after {timeout} s\n"
         rc = 124
     log.write(text)
+    lines = [ln for ln in text.splitlines() if SUMMARY_RE.search(ln) and not ln.startswith("[  FAILED  ] tests:")]
+    if review_ctx is not None:
+        for reason, key in review.classify(text, review_ctx[0], review_ctx[1]):
+            marker = f"{review.MARKER} ({reason}): {key}"
+            log.write(marker + "\n")
+            lines.append(marker)
     log.flush()
-    return rc, [ln for ln in text.splitlines() if SUMMARY_RE.match(ln)]
+    return rc, lines
 
 
-def run_edge(L: Layout, progs: List[str]) -> int:
+def _review_ctx(L: Layout, prog: str, dirs: List[Tuple[str, Path]]):
+    src = L.gen / f"{prog}.c"
+    return (review.null_args(src.read_text(encoding="utf-8")) if src.is_file() else "", dirs)
+
+
+def run_edge(L: Layout, progs: List[str], dirs: List[Tuple[str, Path]]) -> int:
     L.logs.mkdir(parents=True, exist_ok=True)
     found = 0
     with open(L.logs / "edge.log", "w") as log:
         for prog in sorted(progs):
-            rc, summary = _run_logged([str(L.bin / prog)], L.out, log, f"=== EDGE: {prog} ===", 300)
+            rc, summary = _run_logged([str(L.bin / prog)], L.out, log, f"=== EDGE: {prog} ===", 300,
+                                      _review_ctx(L, prog, dirs))
             say(f"=== EDGE: {prog} === {'ok' if rc == 0 else 'FOUND SOMETHING'}")
             for line in summary:
                 say(f"    {line}")
@@ -258,7 +278,7 @@ def run_edge(L: Layout, progs: List[str]) -> int:
     return found
 
 
-def run_fuzz(L: Layout, progs: List[str], seconds: int) -> int:
+def run_fuzz(L: Layout, progs: List[str], seconds: int, dirs: List[Tuple[str, Path]]) -> int:
     L.logs.mkdir(parents=True, exist_ok=True)
     L.crashes.mkdir(parents=True, exist_ok=True)
     found = 0
@@ -268,7 +288,8 @@ def run_fuzz(L: Layout, progs: List[str], seconds: int) -> int:
             corpus.mkdir(parents=True, exist_ok=True)
             cmd = [str(L.bin / prog), "-use_value_profile=1", "-artifact_prefix=crashes/",
                    f"-max_total_time={seconds}", str(corpus.relative_to(L.out))]
-            rc, summary = _run_logged(cmd, L.out, log, f"=== FUZZ: {prog} ===", seconds + 120)
+            rc, summary = _run_logged(cmd, L.out, log, f"=== FUZZ: {prog} ===", seconds + 120,
+                                      _review_ctx(L, prog, dirs))
             say(f"=== FUZZ: {prog} ({seconds}s) === {'ok' if rc == 0 else 'FOUND SOMETHING'}")
             for line in summary:
                 say(f"    {line}")

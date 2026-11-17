@@ -109,10 +109,10 @@ def cmd_run(args) -> int:
     found = 0
     if args.only in (None, "edge"):
         print(">>> Running edge tests...")
-        found += runner.run_edge(L, built["edge"])
+        found += runner.run_edge(L, built["edge"], runner.test_dirs(cfg, L))
     if args.only in (None, "fuzz"):
         print(f">>> Running fuzzers ({seconds} s each)...")
-        found += runner.run_fuzz(L, built["fuzz"], seconds)
+        found += runner.run_fuzz(L, built["fuzz"], seconds, runner.test_dirs(cfg, L))
     print("")
     print(f">>> {found} program(s) found something. Logs: {L.logs}  Crash inputs: {L.crashes}")
     for s in built["skipped"]:

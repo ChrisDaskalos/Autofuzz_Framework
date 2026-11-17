@@ -38,6 +38,10 @@ STAGES += ["skipped", "manual"]
 HEADER = re.compile(r"^=== (?:TEST|EDGE|FUZZ): (?:\./)?(\S+) ===")
 FAILED = re.compile(r"^\[  FAILED  \] (\w+)\s*$")
 SUMMARY = re.compile(r"^SUMMARY: (AddressSanitizer|UndefinedBehaviorSanitizer|libFuzzer): (.*)$")
+ASSERT = re.compile(r"^\S+: (?:\S*/)?([\w.+-]+\.(?:c|h)):(\d+): (\w+): Assertion `.*' failed\.$")
+# Written by the autofuzz runner (autofuzz/review.py) after a report that may be
+# caused by the test itself. The finding is then "REVIEW (<reason>) <finding>".
+REVIEW = re.compile(r"^AUTOFUZZ: NEEDS REVIEW \((.*?)(?::.*)?\): (.*)$")
 LOCATION = re.compile(r"([\w.+-]+\.(?:c|h|cc|cpp|inc)):(\d+)")
 
 
@@ -55,12 +59,23 @@ def finding_from_summary(tool: str, rest: str) -> str:
     return f"ASAN {kind} {where} in {func}".replace("  ", " ")
 
 
+def finding_from_line(line):
+    """A SUMMARY or assert line -> finding text, or None."""
+    m = SUMMARY.match(line)
+    if m:
+        return finding_from_summary(m.group(1), m.group(2))
+    m = ASSERT.match(line)
+    if m:
+        return f"ASSERT {m.group(1)}:{m.group(2)} in {m.group(3)}"
+    return None
+
+
 def parse(lines, program=None):
     """Return {program: {"findings": set, "done": bool}} for one log."""
     progs = {}
 
     def cur():
-        return progs.setdefault(program, {"findings": set(), "done": False})
+        return progs.setdefault(program, {"findings": set(), "done": False, "review": set()})
 
     for line in lines:
         line = line.rstrip("\n")
@@ -76,14 +91,22 @@ def parse(lines, program=None):
         m = FAILED.match(line)
         if m:
             cur()["findings"].add(f"FAILED {m.group(1)}")
-        m = SUMMARY.match(line)
+        m = REVIEW.match(line)
         if m:
-            cur()["findings"].add(finding_from_summary(m.group(1), m.group(2)))
+            f = finding_from_line(m.group(2))
+            if f:
+                cur()["findings"].discard(f)
+                cur()["review"].add(f)
+                cur()["findings"].add(f"REVIEW ({m.group(1)}) {f}")
+            continue
+        f = finding_from_line(line)
+        if f and f not in cur()["review"]:
+            cur()["findings"].add(f)
 
-    # "deadly signal" only repeats a sanitizer report. Keep it only when
-    # there is no sanitizer report (e.g. a plain abort or trap).
+    # "deadly signal" only repeats a sanitizer or assert report. Keep it only
+    # when there is no such report (e.g. a plain abort or trap).
     for p in progs.values():
-        sanitizer = [f for f in p["findings"] if f.startswith(("ASAN", "UBSAN"))]
+        sanitizer = [f for f in p["findings"] if re.match(r"(REVIEW \(.*?\) )?(ASAN|UBSAN|ASSERT)", f)]
         if sanitizer:
             p["findings"].discard("LIBFUZZER deadly signal")
     return progs
@@ -109,7 +132,7 @@ def skipped_findings():
     for name, (prefix, _) in SUITES.items():
         lines = [ln for ln in read(RESULTS / f"{prefix}skipped.txt") if ln.strip()]
         if lines:
-            out[name] = {"findings": {f"SKIPPED {ln.strip()}" for ln in lines}, "done": True}
+            out[name] = {"findings": {f"SKIPPED {ln.strip()}" for ln in lines}, "done": True, "review": set()}
     return out
 
 
@@ -173,8 +196,10 @@ def main() -> int:
         total, new = counts[s]
         req = sum(1 for e in expected if e[0] == s and e[3])
         may = sum(1 for e in expected if e[0] == s and not e[3])
+        rev = sum(1 for p in actual[s].values() for f in p["findings"] if f.startswith("REVIEW"))
         print(f"  {s:<9} {total:2d} findings  (expected: {req} required"
-              f"{f' + {may} maybe' if may else ''}; new: {new})")
+              f"{f' + {may} maybe' if may else ''}; new: {new})"
+              f"{f'  [{rev} need review, not firmware bugs]' if rev else ''}")
     if problems:
         print("")
         for p in problems:

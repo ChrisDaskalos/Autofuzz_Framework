@@ -5,7 +5,11 @@
  * `make test` checks the result against Tests/expected_findings.txt:
  *   - the 3 functions marked SKIP are reported as SKIPPED with the reason;
  *   - the other functions are tested and find nothing;
- *   - board_name() gets a stub that returns NULL, and a warning.
+ *   - board_name() gets a stub that returns NULL, and a warning;
+ *   - first_item() crashes only because the test passes NULL:
+ *     REVIEW (NULL argument), not a firmware bug;
+ *   - ratio() crashes inside the fake header board.h:
+ *     REVIEW (top frame in fake header), not a firmware bug.
  */
 #include <stddef.h>
 #include "selftest.h"
@@ -36,6 +40,18 @@ int wait_ready(int tries)
 int has_name(void)
 {
     return board_name() != NULL;
+}
+
+/* Tested: the test has no setup for `const int *`, so it passes NULL. */
+int first_item(const int *items)
+{
+    return items[0];
+}
+
+/* Tested: the crash (b == 0) happens in the fake header. */
+int ratio(int a, int b)
+{
+    return board_div(a, b);
 }
 
 /* SKIP: register access (an integer constant cast to a pointer). */

@@ -12,6 +12,8 @@
 #              ASAN <kind> <file:line or nothing> in <function>
 #              LIBFUZZER <reason>
 #              SKIPPED <function> (<file>:<line>): <reason>
+#              ASSERT <file>:<line> in <function>
+#              REVIEW (<reason>) <one of the above>   <- caused by the test, not a firmware bug
 #
 # A line that starts with "maybe" is allowed but not required: a known bug
 # that a short random fuzzing run finds in some runs and not in others.
@@ -45,3 +47,8 @@ manual  fuzz_protocol_cmd       UBSAN undefined-behavior protocol\.c:159
 skipped  self  SKIPPED cpu_nop \(src/selftest\.c:\d+\): inline assembly .*
 skipped  self  SKIPPED led_on \(src/selftest\.c:\d+\): casts an integer constant to a pointer .*
 skipped  self  SKIPPED run_forever \(src/selftest\.c:\d+\): never returns .*
+
+# --- AutoFuzz self-test: crashes caused by the test, marked "needs review"
+self-edge  deterministic_edge_first_item  REVIEW \(NULL argument\) .*selftest\.c:\d+.*
+self-fuzz  random_fuzz_first_item         REVIEW \(NULL argument\) .*selftest\.c:\d+.*
+self-fuzz  random_fuzz_ratio              REVIEW \(top frame in fake header\) UBSAN integer-divide-by-zero board\.h:\d+
