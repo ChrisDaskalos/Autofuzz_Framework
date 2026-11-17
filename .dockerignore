@@ -10,7 +10,6 @@ Release
 **/*.bin
 **/*.map
 **/*.list
-ServoProject.pdf
 
 Tests/legacy_thesis/build
 **/autofuzz-out

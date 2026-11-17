@@ -10,10 +10,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autofuzz"
-version = "0.3.0"
+version = "1.0.0"
 description = "Generate CMocka edge tests and libFuzzer harnesses for C functions"
 readme = "README.md"
 requires-python = ">=3.8"
+license = {text = "MIT"}
 dependencies = [
     "libclang>=10",
     "PyYAML>=5.3",

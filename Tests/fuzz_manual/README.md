@@ -22,7 +22,6 @@ make clean
 | `fuzz_uart_dma.c` | Copy of the firmware's UART DMA idle-callback code from `main.c`. The first 4 input bytes are a fake "DMA bytes remaining" counter. |
 | `fuzz_custom_mutator.c` | Custom libFuzzer mutator that builds valid and invalid protocol sessions. Linked into all three fuzzers. |
 | `test_common.c/.h` | HAL stubs for the PC. Different from `Tests/legacy_thesis/test_common.*`. |
-| `mock_protocol_multi.c` | An older mock version of the protocol. Not built; kept for reference. |
 | `*.dict` | libFuzzer dictionaries (protocol keywords and numbers). |
 | `corpus/` | Seed inputs (38 hand-written `seed_*`, 150 `autogen_*`, 168 `edge_*`). Read only. |
 | `make_seeds_edge.py` | Script that wrote the `autogen_*` seeds (uses random, so output differs per run). |
