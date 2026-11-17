@@ -1,0 +1,21 @@
+# Keep the Docker build context small and free of host-built binaries.
+.git
+.vscode
+.settings
+Debug
+Release
+**/__pycache__
+**/*.o
+**/*.elf
+**/*.bin
+**/*.map
+**/*.list
+
+Tests/legacy_thesis/build
+**/autofuzz-out
+.venv
+
+Tests/fuzz_manual/bin
+Tests/fuzz_manual/out
+Tests/fuzz_manual/work_corpus
+Tests/results/

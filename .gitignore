@@ -1,49 +1,68 @@
-# Build artifacts
+# =============================================================================
+# STM32CubeIDE firmware build
+# =============================================================================
 Debug/
-build/
+Release/
+
+# Compiler output
 *.elf
+*.bin
+*.hex
+*.map
+*.list
 *.o
 *.d
 *.su
 *.cyclo
-*.map
-*.list
-*.bin
 
-# STM32CubeIDE
+# Local STM32CubeIDE workspace files
 .settings/
 .cproject
 .project
-*.launch
 
-# Compiled test executables
-Tests/unit_tests/deterministic_edge_*
-Tests/unit_tests/random_fuzz_*
-Tests/unit_tests/test_manual
-!Tests/unit_tests/*.c
+# =============================================================================
+# AutoFuzz - everything below is recreated by `make build` / `make test`
+# =============================================================================
+# Hand-written unit tests of the legacy example (objects; *.elf is above)
+Tests/legacy_thesis/build/
 
-# Test logs (regenerated each run)
-Tests/unit_tests/logs/
+# Output of `autofuzz` (any project)
+autofuzz-out/
 
-# Evolved fuzzing corpus (regenerated, can be large)
-Tests/unit_tests/lf_corpus/
+# Output of the top-level `make test`
+Tests/results/
 
-# Build directories
-Tests/unit_tests/build/
-Tests/unit_tests/_autofuzz.stamp
+# =============================================================================
+# Hand-written fuzzers (Tests/fuzz_manual)
+# =============================================================================
+Tests/fuzz_manual/bin/
+Tests/fuzz_manual/out/
+Tests/fuzz_manual/work_corpus/
 
+# =============================================================================
 # Python
+# =============================================================================
 __pycache__/
 *.py[cod]
+.venv/
+venv/
 *.egg-info/
+# created by `pip install .`
+/build/
+.pytest_cache/
 
-# IDE
+# =============================================================================
+# Editors / misc
+# =============================================================================
 .vscode/
-.idea/
+*.log
+*.tmp
+*.bak
 *.swp
-*~
-.DS_Store
+*.orig
 
-# Keep these critical files
-!Tests/unit_tests/crashes/
-!Tests/unit_tests/autofuzz/
+# libFuzzer writes crash-*/leak-*/timeout-* files into the current folder
+crash-*
+leak-*
+timeout-*
+oom-*

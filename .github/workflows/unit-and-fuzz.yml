@@ -1,56 +1,125 @@
 name: unit-and-fuzz
 
+# Three ways to run the same tests:
+#   native   - on the Ubuntu 24.04 runner: make deps, make build, make test
+#   docker   - docker build + docker run (the image runs `make test`)
+#   ubuntu20 - the same in Dockerfile.ubuntu20 (Ubuntu 20.04, Python 3.8,
+#              clang 10): the oldest supported system, like the developer VM
+# `make test` exits 0 only if the findings match the `baseline:` of each
+# autofuzz.yaml and Tests/expected_findings.txt (hand-written tests).
+#
+# "Run workflow" (manual start) also runs a longer `make fuzz`.
+
 on:
   push:
   pull_request:
   workflow_dispatch:
     inputs:
       fuzz_max_secs:
-        description: "Seconds per fuzzer"
+        description: "Seconds per fuzzer for the long fuzz job"
         required: false
-        default: "60"     # fallback when manually dispatched
+        default: "300"
         type: string
 
 jobs:
-  servo-tests:
-    runs-on: ubuntu-latest
-
-    # Make FUZZ_MAX_SECS available to `make fuzz`
-    env:
-      FUZZ_MAX_SECS: ${{ github.event.inputs.fuzz_max_secs || '60' }}
-
-    defaults:
-      run:
-        shell: bash
-        working-directory: Tests/unit_tests
-
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Clang-18 toolchain, matching Python bindings, and libs
+      - name: Install clang 18, libFuzzer, CMocka
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            clang-18 llvm-18-dev libclang-18-dev python3-clang-18 \
-            build-essential lcov libcmocka-dev
+          sudo apt-get install -y --no-install-recommends \
+            clang-18 libclang-rt-18-dev llvm-18 \
+            build-essential make libcmocka-dev python3-venv
+          sudo ln -sf /usr/bin/clang-18 /usr/local/bin/clang
+          echo "ASAN_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer-18" >> "$GITHUB_ENV"
 
-      - name: Point LIBCLANG_PATH at LLVM 18
+      - name: Install Python packages (requirements.txt)
         run: |
-          echo "LIBCLANG_PATH=/usr/lib/llvm-18/lib" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=/usr/lib/llvm-18/lib:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
-      - name: Build everything
+      - name: make deps
+        run: make deps
+
+      - name: make build
         run: make build
 
-      - name: Run unit tests
-        run: make unit
+      - name: make test
+        run: make test
+
+      - name: Upload logs if results were unexpected
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-native
+          path: |
+            Tests/results/
+            Tests/legacy_thesis/autofuzz-out/crashes/
+            Tests/legacy_thesis/autofuzz-out/logs/
+            Tests/fuzz_manual/out/
+            examples/ringbuf_cli/autofuzz-out/crashes/
+            examples/ringbuf_cli/autofuzz-out/logs/
+          if-no-files-found: ignore
+
+  docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: docker build
+        run: docker build -t autofuzz .
+
+      - name: docker run (make test)
+        run: docker run --rm autofuzz
+
+  ubuntu20:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: docker build (Ubuntu 20.04, Python 3.8, clang 10)
+        run: docker build -f Dockerfile.ubuntu20 -t autofuzz:ubuntu20 .
+
+      - name: make deps, make build, make test
+        run: docker run --rm autofuzz:ubuntu20 sh -c 'make deps && make build && make test'
+
+  long-fuzz:
+    # Only when started by hand ("Run workflow" button).
+    if: github.event_name == 'workflow_dispatch'
+    needs: docker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: docker build
+        run: docker build -t autofuzz .
+
+      - name: make fuzz (finds anything, also known bugs, so it may fail)
+        env:
+          FUZZ_MAX_SECS: ${{ github.event.inputs.fuzz_max_secs }}
+        run: |
+          mkdir -p fuzz-results
+          docker run --rm -e FUZZ_MAX_SECS -v "$PWD/fuzz-results:/out" autofuzz sh -c '
+            make fuzz; rc=$?
+            cp -r Tests/legacy_thesis/autofuzz-out/crashes Tests/legacy_thesis/autofuzz-out/logs Tests/fuzz_manual/out /out/ 2>/dev/null
+            exit $rc'
         continue-on-error: true
 
-      - name: Run edge tests
-        run: make edge
-        continue-on-error: true
-
-      - name: Run fuzz tests
-        run: make fuzz
-        continue-on-error: true
+      - name: Upload fuzz results
+        uses: actions/upload-artifact@v4
+        with:
+          name: long-fuzz-results
+          path: fuzz-results/
+          if-no-files-found: ignore

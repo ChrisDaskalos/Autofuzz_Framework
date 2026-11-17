@@ -1,0 +1,55 @@
+# AutoFuzz config for the ringbuf_cli example (see README.md).
+#
+# A plain C project: no HAL, no fake headers, no stubs needed.
+# Paths are relative to this file.
+#
+#   cd examples/ringbuf_cli && python3 -m autofuzz run
+#
+# All keys are explained in docs/CONFIG.md.
+
+sources:
+  - src/ringbuf.c
+  - src/cli.c
+
+include_dirs:
+  - include
+
+limits:
+  # The input is a command script, so the generic default seeds (empty
+  # strings, numbers, long "AAAA...") are switched off; only these scripts
+  # and the text literals AutoFuzz finds in the code are used.
+  default_string_seeds: false
+  string_seeds:
+    - "count"
+    - "push 1 2 3"
+    - "fill 8"
+    - "fill 8;count;peek 7;pop;pop;count;clear;fill 3;peek 2;push 255 0 7;count;pop;pop;pop"
+    # Fill, take one out, add one: the write that wraps around
+    - "clear;fill 8;count;peek 0;peek 7;pop;count;push 42;count;peek 7;pop;pop;pop;pop;pop;pop;pop;pop"
+
+harness:
+  includes:
+    - ringbuf.h
+    - cli.h
+  # Every ringbuf_t * parameter gets an empty buffer of 8 bytes.
+  # (Skipped for ringbuf_init itself.)
+  setup:
+    - type: ringbuf_t
+      var: rb
+      lines:
+        - static uint8_t rb_storage[8];
+        - ringbuf_init(&rb, rb_storage, sizeof rb_storage);
+
+fuzz:
+  seconds: 10
+
+output_dir: autofuzz-out
+
+# The bug added on purpose (README.md). `autofuzz run` exits 1 only for a
+# bug that is not listed here.
+baseline:
+  # The off-by-one in ringbuf_push: fill the buffer, pop one, push one.
+  - 'edge deterministic_edge_cli_run ASAN global-buffer-overflow ringbuf\.c:34 in ringbuf_push'
+  # The fuzzers find it by themselves in about 1 s (5 of 5 runs of 10 s).
+  - 'fuzz random_fuzz_cli_run ASAN global-buffer-overflow ringbuf\.c:34 in ringbuf_push'
+  - 'fuzz random_fuzz_cli_execute ASAN global-buffer-overflow ringbuf\.c:34 in ringbuf_push'

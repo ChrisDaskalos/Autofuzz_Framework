@@ -1,0 +1,33 @@
+# Findings that the HAND-WRITTEN tests are expected to show (see docs/FINDINGS.md).
+# The findings of the AutoFuzz suites are in the `baseline:` of each
+# autofuzz.yaml (Tests/legacy_thesis, Tests/autofuzz_selftest, the repository
+# root, examples/ringbuf_cli).
+#
+# Format:  <stage>  <program>  <finding>
+#   stage    unit   = Tests/legacy_thesis/test_*.c (CMocka, on the PC copy)
+#            manual = Tests/fuzz_manual (hand-written fuzzers, real Core/Src)
+#   program  test binary or fuzzer name (exact)
+#   finding  a Python regular expression that must match the whole finding:
+#              FAILED <cmocka test name>
+#              UBSAN <kind> <file>:<line>
+#              ASAN <kind> <file:line or nothing> in <function>
+#
+# A line that starts with "maybe" is allowed but not required.
+# `make test` exits 0 only if every finding is listed (here or in a
+# baseline) AND every line without "maybe" was found.
+
+# --- Hand-written unit tests: behaviour differs from what the test expects
+unit    test_protocol_state_machine.elf   FAILED test_state_machine_cancellation_with_whitespace
+unit    test_protocol_servo_command.elf   FAILED test_servo_command_extra_fields
+unit    test_protocol_servo_command.elf   FAILED test_servo_command_zero_step
+unit    test_protocol_servo_command.elf   FAILED test_servo_command_negative_step
+
+# --- Bug 2: signed overflow in ComputeChecksumFromNumbers (PC copy)
+unit    test_manual_overflow.elf                      UBSAN signed-integer-overflow test_common\.c:162
+
+# --- Bug 2 in the real firmware (Core/Src/protocol.c)
+manual  fuzz_protocol_session   UBSAN undefined-behavior protocol\.c:159
+manual  fuzz_protocol_cmd       UBSAN undefined-behavior protocol\.c:159
+
+# fuzz_uart_dma: no findings expected (the old DMA findings were caused by
+# impossible DMA counter values in the harness; fixed).

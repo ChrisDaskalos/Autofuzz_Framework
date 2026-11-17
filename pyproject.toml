@@ -1,0 +1,30 @@
+# AutoFuzz - generates edge tests and libFuzzer harnesses for C functions.
+#
+#   pip install .        installs the package and the `autofuzz` command
+#
+# You do not need to install it to run `make test` in this repository:
+# the Makefile runs `python3 -m autofuzz` from the repository root.
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autofuzz"
+version = "1.0.0"
+description = "Generate CMocka edge tests and libFuzzer harnesses for C functions"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+dependencies = [
+    "libclang>=10",
+    "PyYAML>=5.3",
+]
+
+[project.scripts]
+autofuzz = "autofuzz.__main__:main"
+
+[tool.setuptools]
+packages = ["autofuzz"]
+
+[tool.setuptools.package-data]
+autofuzz = ["*.yaml", "rt/*.h", "fakes/*/*.h"]

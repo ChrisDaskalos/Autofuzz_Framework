@@ -1,0 +1,10 @@
+# Python packages for AutoFuzz (the `autofuzz/` package).
+# The "libclang" package includes its own libclang.so, so it does not
+# depend on which LLVM version the system has installed.
+#
+#   python3 -m venv .venv && . .venv/bin/activate
+#   pip install -r requirements.txt
+#
+# `pip install .` installs the same packages plus the `autofuzz` command.
+libclang==18.1.1
+PyYAML>=5.3
