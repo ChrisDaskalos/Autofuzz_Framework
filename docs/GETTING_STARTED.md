@@ -123,8 +123,17 @@ autofuzz: targets -> cli_execute, cli_output, cli_parse_uint, cli_run, ringbuf_c
 >>> Running fuzzers (10 s each)...
 === FUZZ: random_fuzz_cli_run (10s) === ok
 ...
->>> 1 program(s) found something. Logs: .../autofuzz-out/logs  Crash inputs: .../autofuzz-out/crashes
+>>> 3 program(s) found something. Logs: .../autofuzz-out/logs  Crash inputs: .../autofuzz-out/crashes
+
+>>> Report: 1 firmware bug(s), 0 need review, 0 skipped
+    F1   FIRMWARE BUG (known) ringbuf.c:34 in ringbuf_push: Buffer overflow in a global variable: the code reads or writes past its end.
+         repeat: autofuzz repro F1
+    Full report: .../examples/ringbuf_cli/autofuzz-out/report.md
 ```
+
+The edge test and both command fuzzers found the bug; the report shows it
+once. It says `known` because the example lists it in its `baseline:` (see
+step 7). In your own project it says `NEW`.
 
 Everything is written to `autofuzz-out/` (add it to `.gitignore`):
 
@@ -134,6 +143,7 @@ Everything is written to `autofuzz-out/` (add it to `.gitignore`):
 | `stubs/` | `stubs.c` (here: "Nothing to stub") |
 | `bin/` | the compiled test programs |
 | `logs/` | `edge.log`, `fuzz.log`: the full output |
+| `report.md` | every finding in plain words, with input and repeat command (`report.json`: the same as data) |
 | `crashes/` | inputs that made a fuzzer crash |
 
 Useful options: `--only edge`, `--only fuzz`, `--fuzz-seconds 60`, `--fresh`
@@ -141,7 +151,29 @@ Useful options: `--only edge`, `--only fuzz`, `--fuzz-seconds 60`, `--fresh`
 
 ## 5. Read the finding
 
-`autofuzz-out/logs/edge.log` has the full report:
+Open `autofuzz-out/report.md`. The entry for the bug (long paths shortened;
+the fuzzer input differs in every run):
+
+```
+## F1  FIRMWARE BUG  (known, in the baseline)
+
+Buffer overflow in a global variable: the code reads or writes past its end.
+
+- **Where:** `ringbuf.c:34` in `ringbuf_push`
+- **Message:** global-buffer-overflow: WRITE of 1 byte(s) (0 bytes to the right of global variable 'g_storage')
+- **Code:** `rb->data[rb->head] = value;`
+- **Found by:** `edge deterministic_edge_cli_run`, `fuzz random_fuzz_cli_execute`, `fuzz random_fuzz_cli_run`
+- **Input** (edge test `test_cli_run_edge_7`):
+
+    const char * a0 = "clear;fill 8;count;peek 0;peek 7;pop;count;push 42;count;peek 7;pop;pop;pop;pop;pop;pop;pop;pop";
+    cli_run(a0);
+- **Input** of `random_fuzz_cli_run` (691 bytes, `crashes/crash-32f9140f2a7df990650416602c80312d7193b4ae`):
+  - text: `\xff\xff\xff\xff\xbf\x84\x84\x84\x84;\x84 ... \tpush\t90\t\t\t4 ...`
+  - hex: `ff ff ff ff bf 84 84 84 84 3b 84 ff bf 1f ff 70 75 73 75 ...`
+- **Repeat:** `autofuzz repro F1`, or `cd .../examples/ringbuf_cli/autofuzz-out && ./bin/deterministic_edge_cli_run`
+```
+
+The full sanitizer output is in `autofuzz-out/logs/edge.log`:
 
 ```
 [ RUN      ] test_cli_run_edge_7
@@ -176,7 +208,12 @@ or the crash is on a NULL or zero-filled argument that AutoFuzz passed, the log 
 
 ## 6. Repeat it
 
-The edge test is a normal program; run it again as often as you like:
+```bash
+autofuzz repro F1        # runs the command from the report; shows the same error
+```
+
+The edge test is a normal program; you can also run it yourself, as often as
+you like:
 
 ```bash
 ./autofuzz-out/bin/deterministic_edge_cli_run
@@ -323,12 +360,21 @@ If your function really must handle that input, it is a real bug after all.
 ## 8. Keep it running
 
 - Commit `autofuzz.yaml`, not `autofuzz-out/`.
-- In CI, `autofuzz run` exits 0 if nothing was found, 1 if something was
-  found, 2 or more on an error (missing tool, compile error).
-- If your code has known bugs you do not fix yet, keep a list of them like
-  `examples/ringbuf_cli/expected_findings.txt`; this repository's
-  `make test` compares the findings with such lists
-  (`Tests/check_results.py`).
+- In CI, `autofuzz run` exits 0 if it found no firmware bug, 1 if it found a
+  firmware bug that is not in your `baseline:`, 2 or more on an error
+  (missing tool, compile error). Findings that only *need review* do not
+  make it fail; read them in the report.
+- Known bugs you do not fix yet go into `baseline:` in `autofuzz.yaml`, as in
+  `examples/ringbuf_cli/autofuzz.yaml`:
+
+  ```yaml
+  baseline:
+    - 'edge deterministic_edge_cli_run ASAN global-buffer-overflow ringbuf\.c:34 in ringbuf_push'
+  ```
+
+  The report then marks the bug `known` instead of `NEW`, and lists a
+  baseline line that is no longer found (a fixed bug: delete the line).
+  The format is in [CONFIG.md](CONFIG.md#baseline).
 - AutoFuzz skips functions that cannot run on a PC (inline asm, fixed
   register addresses, endless loops) and lists them in
   `autofuzz-out/gen/skipped.txt`.

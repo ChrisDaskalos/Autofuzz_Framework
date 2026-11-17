@@ -5,8 +5,8 @@ name: unit-and-fuzz
 #   docker   - docker build + docker run (the image runs `make test`)
 #   ubuntu20 - the same in Dockerfile.ubuntu20 (Ubuntu 20.04, Python 3.8,
 #              clang 10): the oldest supported system, like the developer VM
-# `make test` exits 0 only if the findings match Tests/expected_findings.txt
-# (and examples/ringbuf_cli/expected_findings.txt).
+# `make test` exits 0 only if the findings match the `baseline:` of each
+# autofuzz.yaml and Tests/expected_findings.txt (hand-written tests).
 #
 # "Run workflow" (manual start) also runs a longer `make fuzz`.
 

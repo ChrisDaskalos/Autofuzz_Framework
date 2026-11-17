@@ -150,7 +150,7 @@ cd Tests/legacy_thesis/autofuzz-out
 ### 7. Error message
 
 **Edge test**: test 1 adds `-2147483648 + -2147483648`. The real output,
-copied from `Tests/results/edge.log` (long paths shortened):
+copied from `Tests/results/legacy-edge.log` (long paths shortened):
 
 ```
 [==========] deterministic_edge_ComputeChecksumFromNumbers: Running 12 test(s).
@@ -170,7 +170,7 @@ Read it like this:
   `#1` is the test that called it.
 
 **Fuzzer**: libFuzzer finds random values that overflow in less than one
-second. The real output, from `Tests/results/fuzz.log` (long paths shortened):
+second. The real output, from `Tests/results/legacy-fuzz.log` (long paths shortened):
 
 ```
 .../Tests/legacy_thesis/test_common.c:162:24: runtime error: signed integer overflow: 2140273916 + 235802126 cannot be represented in type 'int'
@@ -196,19 +196,41 @@ cd Tests/legacy_thesis/autofuzz-out
 (The values change on every run, because the fuzzer is random. The bug is
 always the same.)
 
-### And then: check the results
+### And then: the report
 
-`Tests/check_results.py` reads all logs and turns each `SUMMARY:` line into
-one finding:
+After the tests, `autofuzz run` reads the logs again (`autofuzz/findings.py`)
+and writes `autofuzz-out/report.md` (`autofuzz/report.py`). The edge test and
+the fuzzer found the same bug, so the report shows it once. The real report
+entry (long paths shortened):
 
 ```
-edge  deterministic_edge_ComputeChecksumFromNumbers  UBSAN signed-integer-overflow test_common.c:162
-fuzz  random_fuzz_ComputeChecksumFromNumbers         UBSAN signed-integer-overflow test_common.c:162
+## F3  FIRMWARE BUG  (known, in the baseline)
+
+Signed integer overflow: the result of an int calculation is too big or too small for its type. In C this is undefined behaviour.
+
+- **Where:** `test_common.c:162` in `ComputeChecksumFromNumbers`
+- **Message:** signed integer overflow: -2147483648 + -2147483648 cannot be represented in type 'int'
+- **Code:** `return (uint8_t)(a + b); /* keep UB so UBSan flags it */`
+- **Found by:** `edge deterministic_edge_ComputeChecksumFromNumbers`, `fuzz random_fuzz_ComputeChecksumFromNumbers`
+- **Input** (edge test `test_ComputeChecksumFromNumbers_edge_1`):
+
+  int a0 = (int)-2147483648;
+  int a1 = (int)-2147483648;
+  ComputeChecksumFromNumbers(a0, a1);
+- **Input** of `random_fuzz_ComputeChecksumFromNumbers` (8 bytes, `crashes/crash-8ea9c9303c03939e9faa1e19e3963624266418ee`):
+  - text: `\xf702(22\te`
+  - hex: `f7 30 32 28 32 32 09 65`
+- **Repeat:** `autofuzz repro F3 --config Tests/legacy_thesis/autofuzz.yaml`, or `cd .../Tests/legacy_thesis/autofuzz-out && ./bin/deterministic_edge_ComputeChecksumFromNumbers`
 ```
 
-Both lines are in `Tests/expected_findings.txt`, so `make test` says
-`All results as expected`. If the bug is fixed, these lines disappear, and
-you must delete them from the expected list too.
+`autofuzz repro F3 --config Tests/legacy_thesis/autofuzz.yaml` runs the edge
+test again and shows the same error message.
+
+The bug is listed in the `baseline:` of `Tests/legacy_thesis/autofuzz.yaml`,
+so it is marked `known`, `autofuzz run` exits 0, and `make test` (which
+compares every finding with the baselines, `Tests/check_results.py`) says
+`All results as expected`. If the bug is fixed, the report lists the baseline
+line as "not found", and you delete it.
 
 ---
 

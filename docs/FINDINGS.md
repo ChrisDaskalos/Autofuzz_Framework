@@ -25,10 +25,12 @@ the real `Core/Src/protocol.c` and `servo.c` (the root `autofuzz.yaml`), compile
 Since the fuzzer fix in 1.0 (see [below](#the-fuzzers-were-blind-fixed-in-10)),
 the generated fuzzers find more. No new bug was found in the real firmware.
 
-The full list that `make test` checks is in
-[`Tests/expected_findings.txt`](../Tests/expected_findings.txt) (and, for the
-second example project, in
-[`examples/ringbuf_cli/expected_findings.txt`](../examples/ringbuf_cli/expected_findings.txt)).
+The full list that `make test` checks is the `baseline:` in each
+`autofuzz.yaml` ([real firmware](../autofuzz.yaml),
+[legacy copy](../Tests/legacy_thesis/autofuzz.yaml),
+[self-test](../Tests/autofuzz_selftest/autofuzz.yaml),
+[ringbuf example](../examples/ringbuf_cli/autofuzz.yaml)) and, for the
+hand-written tests, [`Tests/expected_findings.txt`](../Tests/expected_findings.txt).
 
 ---
 
@@ -41,7 +43,7 @@ more characters and no line end, all 1024 bytes are used and there is no `\0`
 at the end. Then `strtok`/`strcmp` read past the end of `buf`.
 
 **Found by:** `deterministic_edge_Protocol_ProcessCommand` (always), and
-sometimes `random_fuzz_Protocol_ProcessCommand` (marked `maybe` in the expected list).
+sometimes `random_fuzz_Protocol_ProcessCommand` (marked `maybe` in the baseline).
 
 ```
 ==20353==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffd8cc962e0 ...
@@ -140,7 +142,7 @@ report:
 servo.c:40: void Servo_Ramp(uint8_t *, uint8_t, uint8_t): Assertion `step != 0 && step <= SERVO_MAX_STEP' failed.
 ```
 
-`Tests/check_results.py` records it as `ASSERT servo.c:40 in Servo_Ramp`.
+The report and `Tests/check_results.py` record it as `ASSERT servo.c:40 in Servo_Ramp`.
 
 Whether these 4 behaviours are bugs or acceptable is a design choice. The tests
 record that the code does not do what the tests expect.

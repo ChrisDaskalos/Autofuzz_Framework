@@ -6,7 +6,8 @@
 # Writes Tests/results/<prefix>autofuzz.log, <prefix>edge.log, <prefix>fuzz.log
 # and <prefix>skipped.txt. The config must use output_dir: autofuzz-out.
 # Exit code: 0, or the exit code of autofuzz if it is 2 or more (a real error;
-# 1 only means "found something", which check_results.py judges).
+# 1 only means "found a firmware bug that is not in the baseline", which
+# check_results.py reports in detail).
 # Uses AUTOFUZZ from the environment (set by the Makefile).
 cfg="$1"; prefix="$2"; shift 2
 results=Tests/results

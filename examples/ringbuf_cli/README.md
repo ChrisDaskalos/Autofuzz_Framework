@@ -6,7 +6,6 @@ AutoFuzz is not tied to the servo firmware in this repository.
 ```
 examples/ringbuf_cli/
 ├── autofuzz.yaml           what AutoFuzz should test (see docs/CONFIG.md)
-├── expected_findings.txt   what `make test` expects AutoFuzz to find
 ├── include/
 │   ├── ringbuf.h           ring buffer (FIFO) of bytes
 │   └── cli.h               text commands: push, pop, peek, fill, count, clear
@@ -36,7 +35,9 @@ yet. But after one `pop` there is room again, and the next `push` writes
 `data[8]`: one byte past the end of the 8-byte array (an off-by-one).
 
 AutoFuzz finds it in the edge test of `cli_run`, with the seed script from
-`autofuzz.yaml` that fills the buffer, pops one byte and pushes one:
+`autofuzz.yaml` that fills the buffer, pops one byte and pushes one. The
+fuzzers of `cli_run` and `cli_execute` also find it by themselves, from
+random input, in about one second:
 
 ```
 === EDGE: deterministic_edge_cli_run === FOUND SOMETHING
@@ -44,7 +45,7 @@ AutoFuzz finds it in the edge test of `cli_run`, with the seed script from
 ```
 
 The fix is `if (rb->head >= rb->cap)`. Do not fix it here: `make test`
-expects this finding (`expected_findings.txt`).
+expects this finding (the `baseline:` at the end of `autofuzz.yaml`).
 
 ## Run it
 

@@ -12,8 +12,8 @@ registers, a graphical interface.
 - [x] 2. A new person understands the project in 10 minutes from the docs. (`m2-docs`)
 - [x] 3. The user runs one command and edits one config file (`autofuzz.yaml`). Nobody edits Python code. (`m3-config`)
 - [x] 4. It tests the real source files of the servo project, not the copy `test_common.c`. (`m4-real-sources`)
-- [x] 5. It also works on a second, small C project, to show that it is not tied to this firmware. (M5)
-- [ ] 6. The report says in plain words what failed: file, line, input, and the command to repeat it. (M6)
+- [x] 5. It also works on a second, small C project, to show that it is not tied to this firmware. (`m5-second-project`)
+- [x] 6. The report says in plain words what failed: file, line, input, and the command to repeat it. (`m6-report`)
 
 ## Design rules
 
@@ -217,23 +217,32 @@ Code that cannot run on a PC is skipped, and the tool gives the reason.
   reproduces the crash when you copy it as it is.
 - `make test` → `All results as expected`. The Ubuntu 20.04 CI job is green.
 
+**Done (1.0):** `autofuzz/findings.py` (the shared log parser) and `autofuzz/report.py`;
+`report.md` + `report.json` with status, plain sentence, file/line/function, line of code, input
+(edge arguments, or the crash file as text and hex; a crash file is run once to check that it
+repeats on its own) and the repeat command; `autofuzz report` and `autofuzz repro <id>`; the
+`baseline:` key (exit 1 only for a new firmware bug); the expected findings moved into the
+baseline of each `autofuzz.yaml`, and `check_results.py` is a thin wrapper.
+Found on the way and fixed first: the generated fuzzers had no coverage instrumentation
+(also in the thesis version), see [FINDINGS.md](FINDINGS.md#the-fuzzers-were-blind-fixed-in-10).
+
 ---
 
 ## Final folder structure (after M6)
 
 ```
 autofuzz/                 the tool (Python package; `pip install .` gives the `autofuzz` command)
-  __main__.py  config.py  scanner.py  stubgen.py  generator.py  runner.py  report.py  clang_helper.py
+  __main__.py  config.py  main.py  scanner.py  stubgen.py  generator.py  runner.py  review.py  findings.py  report.py
   rt/autofuzz_rt.h        runtime helpers for the generated harnesses
   fakes/stm32f1_hal/      fake HAL headers (types and declarations only)
 autofuzz.yaml             config for the servo firmware (Core/Src)
 pyproject.toml  requirements.txt  Makefile  Dockerfile
 Core/  Drivers/  ServoProject.ioc     the STM32 firmware (not changed)
-examples/ringbuf_cli/     the second project: src/ include/ autofuzz.yaml expected_findings.txt
+examples/ringbuf_cli/     the second project: src/ include/ autofuzz.yaml (with its baseline)
 Tests/
   legacy_thesis/          test_common.c, hand-written CMocka tests, autofuzz.yaml (the thesis example)
   fuzz_manual/            hand-written fuzzers for the real firmware (not changed)
-  check_results.py        a thin wrapper, or removed in M6
+  check_results.py        a thin wrapper around autofuzz/findings.py (for make test)
 docs/
   ROADMAP.md  FINDINGS.md  ARCHITECTURE.md  HOW_IT_WORKS.md  INSTALL.md  CONFIG.md  GETTING_STARTED.md
 autofuzz-out/             generated output, ignored by git
