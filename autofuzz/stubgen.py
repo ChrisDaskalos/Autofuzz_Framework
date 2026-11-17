@@ -57,6 +57,11 @@ def _defined_names(tus: List[cindex.TranslationUnit], src_files: set) -> set:
         for cur in tu.cursor.get_children():
             if cur.kind in _GLOBAL_KINDS and cur.is_definition() and _same_file(cur, src_files):
                 names.add(cur.spelling)
+            # `static char buf[8];` / `int x;` without "= ..." is a tentative
+            # definition: libclang says is_definition() is False, but it is one.
+            if (cur.kind == cindex.CursorKind.VAR_DECL and _same_file(cur, src_files)
+                    and cur.storage_class != cindex.StorageClass.EXTERN):
+                names.add(cur.spelling)
             # A static inline function in a header is defined too
             if cur.kind == cindex.CursorKind.FUNCTION_DECL and cur.is_definition():
                 names.add(cur.spelling)
