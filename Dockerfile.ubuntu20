@@ -23,7 +23,9 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && ln -s /usr/bin/clang-10 /usr/local/bin/clang
 
-ENV ASAN_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer-10
+# Must be named exactly "llvm-symbolizer": the clang 10 sanitizers refuse
+# "llvm-symbolizer-10" ("isn't a known symbolizer") and stop every program.
+ENV ASAN_SYMBOLIZER_PATH=/usr/lib/llvm-10/bin/llvm-symbolizer
 
 # The pip that comes with Ubuntu 20.04 (20.0) is too old for some wheels,
 # so it is upgraded first.

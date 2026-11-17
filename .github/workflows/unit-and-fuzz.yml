@@ -90,11 +90,6 @@ jobs:
       - name: docker build (Ubuntu 20.04, Python 3.8, clang 10)
         run: docker build -f Dockerfile.ubuntu20 -t autofuzz:ubuntu20 .
 
-      # The sanitizers of clang 10 crash at start on newer kernels with more
-      # address-space randomization (vm.mmap_rnd_bits=32). Lower it for this job.
-      - name: Lower ASLR entropy for the old sanitizers
-        run: sudo sysctl -w vm.mmap_rnd_bits=28
-
       - name: make deps, make build, make test
         run: docker run --rm autofuzz:ubuntu20 sh -c 'make deps && make build && make test'
 
