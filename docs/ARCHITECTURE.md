@@ -59,7 +59,7 @@ flowchart TD
     CHECK --> OUT["All results as expected (exit 0)<br/>or UNEXPECTED: ... (exit 1)"]
 ```
 
-`make test` runs AutoFuzz on three configs and also runs the hand-written tests:
+`make test` runs AutoFuzz on four configs and also runs the hand-written tests:
 
 - **The real firmware**: the root `autofuzz.yaml`. AutoFuzz reads `Core/Src/protocol.c`
   and `servo.c` and compiles them **without** `-DUNIT_TEST`, as on the board.
@@ -71,6 +71,10 @@ flowchart TD
 - **The self-test**: `Tests/autofuzz_selftest/` is a tiny C file. It checks that
   AutoFuzz skips code that cannot run on a PC and marks test-caused crashes as
   needs review.
+- **A second project**: `examples/ringbuf_cli/` is a small plain-C project (a ring
+  buffer and a command parser) with one bug on purpose. It shows that AutoFuzz is
+  not tied to the firmware. It has its own `expected_findings.txt`. Walk-through:
+  [GETTING_STARTED.md](GETTING_STARTED.md).
 - **The hand-written fuzzers**: `Tests/fuzz_manual/` links the real `Core/Src`
   files with `-DUNIT_TEST` and its own HAL stubs. Nothing is generated here.
   `fuzz_uart_dma.c` is the only test of the UART/DMA receive path in `main.c`.
@@ -170,6 +174,9 @@ Tests/autofuzz_selftest/     tiny C project: skip detection, stubs, needs review
 Tests/run_suite.sh           runs one AutoFuzz config for `make test`
 Tests/check_results.py       compares the findings with the expected list
 Tests/expected_findings.txt  the expected list
+examples/ringbuf_cli/        a second, unrelated C project (src/, include/), one bug on purpose
+  autofuzz.yaml              its AutoFuzz config (no fake headers)
+  expected_findings.txt      its expected list (stages ex-edge, ex-fuzz)
 docs/                        these documents
 ```
 

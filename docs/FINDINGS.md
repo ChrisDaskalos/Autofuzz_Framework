@@ -23,7 +23,9 @@ the real `Core/Src/protocol.c` and `servo.c` (the root `autofuzz.yaml`), compile
 | `main.c` does not compile: `dmaBuffer[64]` vs `dmaBuffer[1024]` | – | **yes** (`Core/Inc/main.h:39`, `protocol_defs.h:10`) | – (seen by the compiler, see below) | **to check in CubeIDE** |
 
 The full list that `make test` checks is in
-[`Tests/expected_findings.txt`](../Tests/expected_findings.txt).
+[`Tests/expected_findings.txt`](../Tests/expected_findings.txt) (and, for the
+second example project, in
+[`examples/ringbuf_cli/expected_findings.txt`](../examples/ringbuf_cli/expected_findings.txt)).
 
 ---
 
@@ -207,6 +209,22 @@ redefined. They do not use `dmaBuffer`.
 **To check in STM32CubeIDE:** does the project build with these files? If it
 does, the IDE project must differ from git. If it does not, one value of
 `DMA_BUFFER_SIZE` should be removed. `Core/` was not changed in M4.
+
+---
+
+## The second project: `examples/ringbuf_cli` (M5)
+
+Not part of the firmware. A small plain-C project with **one bug added on
+purpose**, to show that AutoFuzz works on other code too: the wrap check in
+`ringbuf_push` uses `>` instead of `>=`, so after "fill, pop one, push one" it
+writes one byte past the 8-byte buffer.
+
+| Finding | Found by | Expected list |
+|---|---|---|
+| `ASAN global-buffer-overflow ringbuf.c:34 in ringbuf_push` | `deterministic_edge_cli_run` (always); the 10 s fuzzers only by luck (`maybe`) | [`examples/ringbuf_cli/expected_findings.txt`](../examples/ringbuf_cli/expected_findings.txt) |
+
+Details: [the example's README](../examples/ringbuf_cli/README.md) and
+[GETTING_STARTED.md](GETTING_STARTED.md).
 
 ---
 

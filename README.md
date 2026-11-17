@@ -49,6 +49,8 @@ autofuzz init          # writes autofuzz.yaml; fill in the 3 REQUIRED keys
 autofuzz run           # checks the tools, generates, compiles, runs
 ```
 
+Step by step, with a small example project and its bug:
+[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 All settings are in `autofuzz.yaml`: [docs/CONFIG.md](docs/CONFIG.md).
 
 ## Expected output
@@ -66,9 +68,12 @@ when the findings are exactly the ones in
   self-fuzz  2 findings  (expected: 2 required; new: 0)  [2 need review, not firmware bugs]
   real-edge  3 findings  (expected: 3 required; new: 0)
   real-fuzz  2 findings  (expected: 2 required + 1 maybe; new: 0)
+  ex-edge    1 findings  (expected: 1 required; new: 0)
+  ex-fuzz    0 findings  (expected: 0 required + 2 maybe; new: 0)
   skipped    3 findings  (expected: 3 required; new: 0)
   manual     2 findings  (expected: 2 required; new: 0)
-  Expected list: Tests/expected_findings.txt   Logs: Tests/results/
+  Expected lists: Tests/expected_findings.txt, examples/ringbuf_cli/expected_findings.txt
+  Logs: Tests/results/
 =================================================================
 All results as expected
 ```
@@ -76,7 +81,8 @@ All results as expected
 Exit code 0 means "as expected". Exit code 1 and a last line starting with
 `UNEXPECTED:` means something is different (a new bug, or a known bug that is gone).
 
-`edge`/`fuzz` are the legacy example, `real-*` the real firmware, `self-*` and
+`edge`/`fuzz` are the legacy example, `real-*` the real firmware, `ex-*` the
+second project `examples/ringbuf_cli` (its off-by-one bug), `self-*` and
 `skipped` the AutoFuzz self-test (its findings are caused on purpose).
 
 **What was found:** one real bug in the firmware (a signed integer overflow
@@ -90,6 +96,7 @@ Details: [docs/FINDINGS.md](docs/FINDINGS.md).
 
 | Document | Read it to learn |
 |---|---|
+| [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) | how to use AutoFuzz on your own project, with `examples/ringbuf_cli` |
 | [docs/FINDINGS.md](docs/FINDINGS.md) | which findings are real firmware bugs, and which are only in the legacy copy |
 | [docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md) | one function, step by step, from the C code to the error message; glossary |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the flow diagram, all `make` commands, the folder map, CI, building the firmware |

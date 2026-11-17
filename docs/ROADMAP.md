@@ -12,7 +12,7 @@ registers, a graphical interface.
 - [x] 2. A new person understands the project in 10 minutes from the docs. (`m2-docs`)
 - [x] 3. The user runs one command and edits one config file (`autofuzz.yaml`). Nobody edits Python code. (`m3-config`)
 - [x] 4. It tests the real source files of the servo project, not the copy `test_common.c`. (`m4-real-sources`)
-- [ ] 5. It also works on a second, small C project, to show that it is not tied to this firmware. (M5)
+- [x] 5. It also works on a second, small C project, to show that it is not tied to this firmware. (M5)
 - [ ] 6. The report says in plain words what failed: file, line, input, and the command to repeat it. (M6)
 
 ## Design rules
@@ -180,7 +180,8 @@ Code that cannot run on a PC is skipped, and the tool gives the reason.
    (`examples/ringbuf_cli/expected_findings.txt`).
 4. `docs/GETTING_STARTED.md`: "Use AutoFuzz on your own project", with this example as the walk-through.
 
-**Files touched:** `examples/ringbuf_cli/**`, `Makefile`, `Tests/check_results.py`,
+**Files touched:** `examples/ringbuf_cli/**`, `Makefile`, `Tests/check_results.py`, `autofuzz/stubgen.py`
+(general fix: a `static` global without `= ...` is defined, not stubbed),
 `.github/workflows/unit-and-fuzz.yml`, `docs/GETTING_STARTED.md`.
 
 **How we verify**
