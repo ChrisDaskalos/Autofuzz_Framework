@@ -238,3 +238,18 @@ docs/
   ROADMAP.md  FINDINGS.md  ARCHITECTURE.md  HOW_IT_WORKS.md  INSTALL.md  CONFIG.md  GETTING_STARTED.md
 autofuzz-out/             generated output, ignored by git
 ```
+
+---
+
+## After 1.0
+
+Not part of 1.0. Ideas to do later, in no fixed order.
+
+- **Edge tests: combine normal values with edge values.** Today an edge test combines edge values
+  with each other (for example the smallest angle with the largest step). It should also put one
+  edge value next to normal values for the other parameters, for example a valid angle with
+  step 0. That finds bugs that need only one unusual value.
+- **`DMA_BUFFER_SIZE` mismatch.** `Core/Inc/main.h` says 64, `Core/Inc/protocol_defs.h` says 1024,
+  so `main.c` does not compile on the PC and AutoFuzz cannot test it. It must be checked in
+  STM32CubeIDE which value is right. See
+  [FINDINGS.md](FINDINGS.md#found-while-doing-m4-mainc-and-dma_buffer_size).
