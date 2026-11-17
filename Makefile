@@ -2,8 +2,9 @@
 ##
 ##   make deps    check that the needed tools are installed
 ##   make build   unit tests + `autofuzz build` + hand-written fuzzers
-##   make test    unit + edge + short fuzzing, compared with the expected
-##                findings (about 4 minutes; exit 0 = as expected)
+##   make test    unit + edge + short fuzzing (also examples/ringbuf_cli),
+##                compared with the expected findings (about 5 minutes;
+##                exit 0 = as expected)
 ##   make check-determinism  generate twice, the outputs must be identical
 ##   make fuzz    longer fuzzing of all fuzzers (FUZZ_MAX_SECS each)
 ##   make clean   remove everything that build/test/fuzz created
@@ -27,8 +28,10 @@ LEGACY_CFG := $(UNIT)/autofuzz.yaml
 SELF_CFG   := Tests/autofuzz_selftest/autofuzz.yaml
 # The real firmware sources (Core/Src/protocol.c, servo.c)
 REAL_CFG   := autofuzz.yaml
+# A second, unrelated C project (expected findings in its own folder)
+EXAMPLE_CFG := examples/ringbuf_cli/autofuzz.yaml
 # Every config that `make test` runs and checks for determinism
-CONFIGS    := $(LEGACY_CFG) $(SELF_CFG) $(REAL_CFG)
+CONFIGS    := $(LEGACY_CFG) $(SELF_CFG) $(REAL_CFG) $(EXAMPLE_CFG)
 export AUTOFUZZ
 
 .PHONY: help deps build test fuzz clean check-determinism
@@ -62,6 +65,7 @@ test: build
 > @Tests/run_suite.sh $(LEGACY_CFG) "" --fuzz-seconds $(TEST_FUZZ_SECS)
 > @Tests/run_suite.sh $(SELF_CFG) self-
 > @Tests/run_suite.sh $(REAL_CFG) real- --fuzz-seconds $(TEST_FUZZ_SECS)
+> @Tests/run_suite.sh $(EXAMPLE_CFG) ex- --fuzz-seconds $(TEST_FUZZ_SECS)
 > @$(MAKE) --no-print-directory -C $(MANUAL) fuzz FUZZ_MAX_SECS=$(TEST_FUZZ_SECS) > $(RESULTS)/manual.log 2>&1; \
 >  grep -E '^=== MANUAL|^Done|^SUMMARY' $(RESULTS)/manual.log; true
 > @$(MAKE) --no-print-directory check-determinism
@@ -80,14 +84,15 @@ check-determinism:
 > done
 > @rm -rf $(RESULTS)/determinism
 
-# Both fuzz suites always run; the exit code is 1 if either found something.
+# All fuzz suites always run; the exit code is 1 if either found something.
 fuzz: build
 > @rc=0; \
 > $(AUTOFUZZ) run --config $(LEGACY_CFG) --only fuzz --fuzz-seconds $(FUZZ_MAX_SECS) || rc=1; \
 > $(AUTOFUZZ) run --config $(REAL_CFG) --only fuzz --fuzz-seconds $(FUZZ_MAX_SECS) || rc=1; \
+> $(AUTOFUZZ) run --config $(EXAMPLE_CFG) --only fuzz --fuzz-seconds $(FUZZ_MAX_SECS) || rc=1; \
 > $(MAKE) -C $(MANUAL) fuzz FUZZ_MAX_SECS=$(FUZZ_MAX_SECS) || rc=1; \
 > echo ""; \
-> echo ">>> Fuzzing done. Results: autofuzz-out/crashes/ autofuzz-out/logs/ $(UNIT)/autofuzz-out/crashes/ $(UNIT)/autofuzz-out/logs/ $(MANUAL)/out/"; \
+> echo ">>> Fuzzing done. Results: autofuzz-out/crashes/ autofuzz-out/logs/ examples/ringbuf_cli/autofuzz-out/ $(UNIT)/autofuzz-out/crashes/ $(UNIT)/autofuzz-out/logs/ $(MANUAL)/out/"; \
 > exit $$rc
 
 clean:
@@ -95,4 +100,5 @@ clean:
 > $(MAKE) -C $(MANUAL) clean
 > @$(AUTOFUZZ) clean --config $(SELF_CFG) >/dev/null
 > @$(AUTOFUZZ) clean --config $(REAL_CFG) >/dev/null
+> @$(AUTOFUZZ) clean --config $(EXAMPLE_CFG) >/dev/null
 > rm -rf $(RESULTS)

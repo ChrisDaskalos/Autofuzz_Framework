@@ -9,6 +9,9 @@ Reads:
   Tests/results/<prefix>skipped.txt            (functions AutoFuzz skipped, per suite)
   Tests/fuzz_manual/out/<fuzzer>.log           (output of Tests/fuzz_manual)
 
+Expected findings: Tests/expected_findings.txt plus the expected_findings.txt
+of each example project in EXAMPLES (same format).
+
 Prints one line per stage, then as the very last line either
   "All results as expected"            (exit code 0)
 or
@@ -19,6 +22,7 @@ import sys
 from pathlib import Path
 
 TESTS = Path(__file__).resolve().parent
+ROOT = TESTS.parent
 RESULTS = TESTS / "results"
 UNIT_DIR = TESTS / "legacy_thesis"
 MANUAL_DIR = TESTS / "fuzz_manual"
@@ -29,8 +33,12 @@ MANUAL_FUZZERS = ["fuzz_protocol_session", "fuzz_protocol_cmd", "fuzz_uart_dma"]
 SUITES = {
     "legacy": ("", UNIT_DIR),
     "self": ("self-", TESTS / "autofuzz_selftest"),
-    "real": ("real-", TESTS.parent),        # autofuzz.yaml in the repo root: Core/Src
+    "real": ("real-", ROOT),                # autofuzz.yaml in the repo root: Core/Src
+    "example": ("ex-", ROOT / "examples" / "ringbuf_cli"),
 }
+# Example projects that keep their own expected_findings.txt
+EXAMPLES = [ROOT / "examples" / "ringbuf_cli"]
+EXPECTED_FILES = [TESTS / "expected_findings.txt"] + [d / "expected_findings.txt" for d in EXAMPLES]
 STAGES = ["unit"]
 for _prefix, _ in SUITES.values():
     STAGES += [f"{_prefix}edge", f"{_prefix}fuzz"]
@@ -141,18 +149,21 @@ def skipped_findings():
 
 def load_expected():
     expected = []
-    for n, line in enumerate(read(TESTS / "expected_findings.txt"), 1):
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        required = True
-        if line.startswith("maybe "):
-            required = False
-            line = line[len("maybe "):].strip()
-        parts = line.split(None, 2)
-        if len(parts) != 3 or parts[0] not in STAGES:
-            sys.exit(f"expected_findings.txt:{n}: cannot read line: {line}")
-        expected.append((parts[0], parts[1], re.compile(parts[2]), required))
+    for path in EXPECTED_FILES:
+        if not path.exists():
+            sys.exit(f"missing: {path.relative_to(ROOT)}")
+        for n, line in enumerate(read(path), 1):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            required = True
+            if line.startswith("maybe "):
+                required = False
+                line = line[len("maybe "):].strip()
+            parts = line.split(None, 2)
+            if len(parts) != 3 or parts[0] not in STAGES:
+                sys.exit(f"{path.relative_to(ROOT)}:{n}: cannot read line: {line}")
+            expected.append((parts[0], parts[1], re.compile(parts[2]), required))
     return expected
 
 
@@ -207,7 +218,8 @@ def main() -> int:
         print("")
         for p in problems:
             print(f"  - {p}")
-    print("  Expected list: Tests/expected_findings.txt   Logs: Tests/results/")
+    print("  Expected lists: " + ", ".join(str(p.relative_to(ROOT)) for p in EXPECTED_FILES))
+    print("  Logs: Tests/results/")
     print("=================================================================")
     if problems:
         print(f"UNEXPECTED: {len(problems)} difference(s): " + "; ".join(problems))

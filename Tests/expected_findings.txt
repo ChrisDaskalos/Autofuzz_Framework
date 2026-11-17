@@ -3,10 +3,12 @@
 # Format:  <stage>  <program>  <finding>
 #   stage    unit | edge | fuzz | real-edge | real-fuzz | self-edge | self-fuzz
 #            | skipped | manual
+#            (ex-edge / ex-fuzz: examples/ringbuf_cli, listed in
+#             examples/ringbuf_cli/expected_findings.txt)
 #            (edge/fuzz = Tests/legacy_thesis, real-* = the real Core/Src with
 #             the root autofuzz.yaml, self-* = Tests/autofuzz_selftest)
 #   program  test binary or fuzzer name (exact); for "skipped": the suite
-#            (legacy | real | self)
+#            (legacy | real | self | example)
 #   finding  a Python regular expression that must match the whole finding.
 #            Findings look like:
 #              FAILED <cmocka test name>
