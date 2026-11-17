@@ -1,0 +1,91 @@
+# AutoFuzz config for the REAL servo firmware (Core/Src).
+#
+#   autofuzz run          (or: python3 -m autofuzz run)
+#
+# The real sources are compiled on the PC WITHOUT -DUNIT_TEST, so the code
+# is the same as on the board. The HAL comes from the fake headers in
+# autofuzz/fakes/stm32f1_hal/ (types and declarations only), and AutoFuzz
+# generates stubs for the HAL functions and handles (autofuzz-out/stubs/).
+# main.c (UART/DMA receive path, clock and GPIO setup) is not listed: it
+# needs the real registers. See docs/FINDINGS.md, "Not covered".
+#
+# Paths are relative to this file. All keys: docs/CONFIG.md.
+
+# REQUIRED
+sources:
+  - Core/Src/protocol.c
+  - Core/Src/servo.c
+
+# Optional: the fake HAL replaces stm32f1xx_hal.h (it comes before include_dirs)
+fake_include_dirs:
+  - builtin:stm32f1_hal
+
+# REQUIRED
+include_dirs:
+  - Core/Inc
+
+harness:
+  # REQUIRED
+  includes:
+    - protocol.h
+    - servo.h
+  # Optional: how to prepare pointer parameters
+  setup:
+    # Every ProtocolContext * gets a context that is logged in and waits for
+    # a servo command, like the board after the password and menu option 1.
+    # (Not for Protocol_Init itself.)
+    - type: ProtocolContext
+      var: ctx
+      lines:
+        - Protocol_Init(&ctx);
+        - ctx.authenticated = 1;
+        - ctx.state = STATE_WAIT_SERVO;
+    # Servo_Ramp(uint8_t *currentAngle, ...): a real variable, not NULL.
+    - type: uint8_t
+      var: current_angle
+      lines:
+        - current_angle = SERVO_DEFAULT_ANGLE;
+
+limits:
+  # Added to the default seeds in autofuzz/defaults.yaml
+  string_seeds:
+    # Password and menu
+    - "1234"
+    - "WRONG"
+    - "1"
+    - "2"
+    - "3"
+    - "4"
+    - "9"
+    # Cancel
+    - "B"
+    - "b"
+    # Servo commands (angle,step,checksum): valid
+    - "(90,5,95)"
+    - "(0,1,1)"
+    - "(165,5,170)"
+    - "90,5,95"
+    # Servo commands: edge cases
+    - "(166,5,171)"
+    - "(90,0,90)"
+    - "(90,-1,89)"
+    - "(255,1,0)"
+    - "(2147483647,1,0)"
+    # Servo commands: malformed
+    - "(90,5,99)"
+    - "(90,5)"
+    - "(90,5,95,1)"
+    - "(90,5,95"
+    - "()"
+    - "(,,)"
+    - "(abc,def,ghi)"
+    - "( 90 , 5 , 95 )"
+    # Around DMA_BUFFER_SIZE (1024)
+    - {repeat: A, times: 1023}
+    - {repeat: A, times: 1024}
+    - {repeat: A, times: 1050, prefix: "(", suffix: ")"}
+
+fuzz:
+  seconds: 10
+
+output_dir: autofuzz-out

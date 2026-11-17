@@ -1,10 +1,12 @@
 # Findings that `make test` expects today (see docs/FINDINGS.md).
 #
 # Format:  <stage>  <program>  <finding>
-#   stage    unit | edge | fuzz | self-edge | self-fuzz | skipped | manual
-#            (edge/fuzz = Tests/legacy_thesis, self-* = Tests/autofuzz_selftest)
+#   stage    unit | edge | fuzz | real-edge | real-fuzz | self-edge | self-fuzz
+#            | skipped | manual
+#            (edge/fuzz = Tests/legacy_thesis, real-* = the real Core/Src with
+#             the root autofuzz.yaml, self-* = Tests/autofuzz_selftest)
 #   program  test binary or fuzzer name (exact); for "skipped": the suite
-#            (legacy | self)
+#            (legacy | real | self)
 #   finding  a Python regular expression that must match the whole finding.
 #            Findings look like:
 #              FAILED <cmocka test name>
@@ -39,6 +41,18 @@ maybe fuzz random_fuzz_Protocol_ProcessCommand      ASAN stack-buffer-overflow .
 # --- Bug 2 in the real firmware (Core/Src/protocol.c)
 manual  fuzz_protocol_session   UBSAN undefined-behavior protocol\.c:159
 manual  fuzz_protocol_cmd       UBSAN undefined-behavior protocol\.c:159
+
+# --- AutoFuzz on the REAL firmware (root autofuzz.yaml: Core/Src/protocol.c,
+#     servo.c, compiled without UNIT_TEST, fake HAL + generated stubs)
+# Bug 2: directly, and through the real input path (seed "(2147483647,1,0)")
+real-edge  deterministic_edge_ComputeChecksumFromNumbers  UBSAN signed-integer-overflow protocol\.c:159
+real-fuzz  random_fuzz_ComputeChecksumFromNumbers         UBSAN signed-integer-overflow protocol\.c:159
+real-edge  deterministic_edge_Protocol_ProcessCommand     UBSAN signed-integer-overflow protocol\.c:159
+maybe real-fuzz random_fuzz_Protocol_ProcessCommand       UBSAN signed-integer-overflow protocol\.c:159
+# Step 0 or step > SERVO_MAX_STEP reaches the assert in Servo_Ramp
+real-edge  deterministic_edge_Servo_Ramp                  ASSERT servo\.c:40 in Servo_Ramp
+real-fuzz  random_fuzz_Servo_Ramp                         ASSERT servo\.c:40 in Servo_Ramp
+# Bug 1 (stack buffer overflow) must NOT be found here: it is only in the copy.
 
 # fuzz_uart_dma: no findings expected (the old DMA findings were caused by
 # impossible DMA counter values in the harness; fixed).

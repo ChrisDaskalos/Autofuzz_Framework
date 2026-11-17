@@ -29,6 +29,7 @@ MANUAL_FUZZERS = ["fuzz_protocol_session", "fuzz_protocol_cmd", "fuzz_uart_dma"]
 SUITES = {
     "legacy": ("", UNIT_DIR),
     "self": ("self-", TESTS / "autofuzz_selftest"),
+    "real": ("real-", TESTS.parent),        # autofuzz.yaml in the repo root: Core/Src
 }
 STAGES = ["unit"]
 for _prefix, _ in SUITES.values():
@@ -38,7 +39,8 @@ STAGES += ["skipped", "manual"]
 HEADER = re.compile(r"^=== (?:TEST|EDGE|FUZZ): (?:\./)?(\S+) ===")
 FAILED = re.compile(r"^\[  FAILED  \] (\w+)\s*$")
 SUMMARY = re.compile(r"^SUMMARY: (AddressSanitizer|UndefinedBehaviorSanitizer|libFuzzer): (.*)$")
-ASSERT = re.compile(r"^\S+: (?:\S*/)?([\w.+-]+\.(?:c|h)):(\d+): (\w+): Assertion `.*' failed\.$")
+# glibc prints the function name or its full signature: "void f(int)"
+ASSERT = re.compile(r"^\S+: (?:\S*/)?([\w.+-]+\.(?:c|h)):(\d+): (.+?): Assertion `.*' failed\.$")
 # Written by the autofuzz runner (autofuzz/review.py) after a report that may be
 # caused by the test itself. The finding is then "REVIEW (<reason>) <finding>".
 REVIEW = re.compile(r"^AUTOFUZZ: NEEDS REVIEW \((.*?)(?::.*)?\): (.*)$")
@@ -66,7 +68,8 @@ def finding_from_line(line):
         return finding_from_summary(m.group(1), m.group(2))
     m = ASSERT.match(line)
     if m:
-        return f"ASSERT {m.group(1)}:{m.group(2)} in {m.group(3)}"
+        func = re.search(r"(\w+)\s*\(", m.group(3))
+        return f"ASSERT {m.group(1)}:{m.group(2)} in {func.group(1) if func else m.group(3)}"
     return None
 
 

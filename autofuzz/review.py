@@ -28,7 +28,8 @@ _ASAN_ERROR = re.compile(r"^==\d+==\s*ERROR: (AddressSanitizer|libFuzzer): (.*)$
 _UBSAN_ERROR = re.compile(r"^(\S+?):(\d+):(?:\d+:)? runtime error: (.*)$")
 _FRAME = re.compile(r"^\s*#\d+ 0x[0-9a-f]+ in \S+ (/\S+?\.(?:c|h|cc|cpp|inc)):(\d+)")
 _SUMMARY = re.compile(r"^SUMMARY: (AddressSanitizer|UndefinedBehaviorSanitizer|libFuzzer): ")
-ASSERT_LINE = re.compile(r"^\S+: (\S+?\.(?:c|h)):(\d+): (\w+): Assertion `.*' failed\.$")
+# glibc: "<prog>: <file>:<line>: <function or its full signature>: Assertion `<expr>' failed."
+ASSERT_LINE = re.compile(r"^\S+: (\S+?\.(?:c|h)):(\d+): (.+?): Assertion `.*' failed\.$")
 _ZERO_PAGE = re.compile(r"(?:unknown address|address) (0x[0-9a-f]+)")
 
 
