@@ -39,6 +39,9 @@ Tests/legacy_thesis/lf_corpus/
 Tests/legacy_thesis/corpus/
 Tests/legacy_thesis/logs/
 
+# Output of `autofuzz` (any project)
+autofuzz-out/
+
 # Output of the top-level `make test`
 Tests/results/
 

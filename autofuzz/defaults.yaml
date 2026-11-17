@@ -53,7 +53,6 @@ harness:
   setup: []
 
 fuzz:
-  seconds: 10
-  rss_limit_mb: 600
+  seconds: 10         # seconds per fuzzer for `autofuzz run`
 
 output_dir: autofuzz-out

@@ -1,0 +1,89 @@
+# autofuzz.yaml - settings for AutoFuzz on this project.
+#
+# Run:  autofuzz run        (checks tools, generates tests, compiles, runs)
+# Paths are relative to this file. All keys: docs/CONFIG.md.
+# A key you leave out keeps its default (autofuzz/defaults.yaml).
+
+# The .c files to test. AutoFuzz writes tests for their non-static functions.
+# Example:
+#   sources:
+#     - src/parser.c
+#     - src/ringbuf.c
+sources: []
+
+# Folders with the .h files your sources include (passed as -I, in this order).
+# Example:
+#   include_dirs:
+#     - include
+#     - tests/fakes
+include_dirs: []
+
+# Preprocessor defines (passed as -D).
+# Example:
+#   defines:
+#     - UNIT_TEST
+#     - BUFFER_SIZE=64
+defines: []
+
+# Extra compiler flags. Example:  cflags: [-std=c99]
+cflags: [-std=c11]
+
+# The C compiler. It must be clang (libFuzzer). Example:  compiler: clang-18
+compiler: clang
+
+# Which functions to test. Shell-style patterns; an empty include = all.
+# Example:
+#   functions:
+#     include: [Parser_*]
+#     exclude: [Parser_Debug*]
+functions:
+  include: []
+  exclude: []
+
+limits:
+  # At most this many edge values per parameter. Example:  edge_cap: 8
+  edge_cap: 12
+
+  # Size of the text buffer a fuzzer gives to a `char *` parameter.
+  # Example:  buffer_size: 256
+  buffer_size: 4096
+
+  # The valid range of an integer parameter, as Function.parameter: [min, max].
+  # AutoFuzz then tests min-1, min, min+1, the middle, max-1, max, max+1.
+  # Example:
+  #   int_ranges:
+  #     Servo_SetAngle.angle: [0, 180]
+  int_ranges: {}
+
+  # Text inputs for `char *` parameters, added to the default list.
+  # Write plain text; {repeat, times} makes long strings.
+  # Example:
+  #   string_seeds:
+  #     - "HELP"
+  #     - "(90,5,95)"
+  #     - {repeat: A, times: 300}
+  string_seeds: []
+
+harness:
+  # Headers every generated test includes (they must declare the functions).
+  # Example:  includes: [parser.h]
+  includes: []
+
+  # How to prepare a struct parameter before the call. For a parameter of
+  # type `<type> *`, AutoFuzz declares `<type> <var>;`, runs the lines,
+  # and passes `&<var>`.
+  # Example:
+  #   setup:
+  #     - type: Parser
+  #       var: p
+  #       lines:
+  #         - Parser_Init(&p);
+  setup: []
+
+fuzz:
+  # Seconds per fuzzer for `autofuzz run`. Example:  seconds: 60
+  seconds: 10
+
+# Where AutoFuzz writes everything (add it to .gitignore).
+# Example:  output_dir: build/autofuzz
+output_dir: autofuzz-out

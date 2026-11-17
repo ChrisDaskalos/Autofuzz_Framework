@@ -56,7 +56,7 @@ SCHEMA: Dict[str, Any] = {
         "default_string_seeds": BOOL,
     },
     "harness": {"includes": STR_LIST, "setup": SETUP_LIST},
-    "fuzz": {"seconds": INT, "rss_limit_mb": INT},
+    "fuzz": {"seconds": INT},
     "output_dir": STR,
 }
 SETUP_KEYS = {"type": STR, "var": STR, "lines": STR_LIST}
@@ -257,7 +257,6 @@ class Config:
         self.setup = [SetupEntry(str(e["type"]), str(e["var"]), e.get("lines") or []) for e in h.get("setup") or []]
         fz = d.get("fuzz") or {}
         self.fuzz_seconds = int(fz.get("seconds", 10))
-        self.rss_limit_mb = int(fz.get("rss_limit_mb", 600))
         self.output_dir = self._abs(d.get("output_dir") or "autofuzz-out")
 
         # Edge values per C type (used by scanner and generator)
