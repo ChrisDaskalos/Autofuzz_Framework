@@ -4,6 +4,7 @@
 ##   make build   generate harnesses + compile all tests and fuzzers
 ##   make test    unit + edge + short fuzzing, compared with the expected
 ##                findings (about 3 minutes; exit 0 = as expected)
+##   make check-determinism  generate twice, the outputs must be identical
 ##   make fuzz    longer fuzzing of all fuzzers (FUZZ_MAX_SECS each)
 ##   make clean   remove everything that build/test/fuzz created
 ##
@@ -20,8 +21,11 @@ FUZZ_MAX_SECS  ?= 60
 TEST_FUZZ_SECS ?= 10
 
 PYTHON ?= python3
+# The tool is run from the repository root, so `pip install .` is not needed.
+AUTOFUZZ := PYTHONPATH=$(CURDIR) $(PYTHON) -m autofuzz
+LEGACY_CFG := $(UNIT)/autofuzz.yaml
 
-.PHONY: help deps build test fuzz clean
+.PHONY: help deps build test fuzz clean check-determinism
 
 help:
 > @sed -n 's/^##//p' $(firstword $(MAKEFILE_LIST))
@@ -62,7 +66,18 @@ test: build
 >  grep -E '^=== FUZZ|^Done|^SUMMARY' $(RESULTS)/fuzz.log; true
 > @$(MAKE) --no-print-directory -C $(MANUAL) fuzz FUZZ_MAX_SECS=$(TEST_FUZZ_SECS) > $(RESULTS)/manual.log 2>&1; \
 >  grep -E '^=== MANUAL|^Done|^SUMMARY' $(RESULTS)/manual.log; true
+> @$(MAKE) --no-print-directory check-determinism
 > @$(PYTHON) Tests/check_results.py
+
+# Same input, same output: generate twice with different Python hash seeds
+# (so the order of a Python set cannot leak into the files) and compare.
+check-determinism:
+> @rm -rf $(RESULTS)/determinism
+> @PYTHONHASHSEED=1 $(AUTOFUZZ) generate --config $(LEGACY_CFG) --output-dir $(RESULTS)/determinism/a >/dev/null
+> @PYTHONHASHSEED=2 $(AUTOFUZZ) generate --config $(LEGACY_CFG) --output-dir $(RESULTS)/determinism/b >/dev/null
+> @diff -r $(RESULTS)/determinism/a/gen $(RESULTS)/determinism/b/gen \
+>   && echo ">>> Determinism: generating twice gives identical files ($$(ls $(RESULTS)/determinism/a/gen | wc -l) files)"
+> @rm -rf $(RESULTS)/determinism
 
 # Both fuzz suites always run; the exit code is 1 if either found something.
 fuzz: build
