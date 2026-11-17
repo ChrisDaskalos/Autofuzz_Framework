@@ -100,3 +100,13 @@ fuzz:
 # Optional. Where AutoFuzz writes everything (add it to .gitignore).
 # Example:  output_dir: build/autofuzz
 output_dir: autofuzz-out
+
+# Optional. Known findings you do not fix yet. `autofuzz run` exits 1 only for a
+# firmware bug that is NOT in this list. One line each, in single quotes:
+#   '[maybe] <edge|fuzz|skipped> <program or function> <regular expression>'
+# The regular expression must match the whole finding as printed in report.md.
+# Example:
+#   baseline:
+#     - 'edge deterministic_edge_Parse UBSAN signed-integer-overflow parser\.c:42'
+#     - 'maybe fuzz random_fuzz_Parse ASAN stack-buffer-overflow .*'
+baseline: []

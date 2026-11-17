@@ -126,9 +126,9 @@ def cmd_run(args) -> int:
 
 def _report(args, cfg, out: Path, build_skipped=()) -> int:
     """Write report.md/report.json, print the summary.
-    Exit code: 1 if there is a firmware bug, else 0."""
-    findings = report.collect(out, (), build_skipped)
-    items = report.write(out, findings, args.config or "")
+    Exit code: 1 if a firmware bug is not in the baseline, else 0."""
+    findings = report.collect(out, cfg.baseline, build_skipped)
+    items = report.write(out, findings, args.config or "", report.missing(findings, cfg.baseline))
     print("")
     for line in report.summary(items, out, args.config or ""):
         print(line)

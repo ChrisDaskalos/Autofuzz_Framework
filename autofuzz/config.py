@@ -62,7 +62,10 @@ SCHEMA: Dict[str, Any] = {
     "harness": {"includes": STR_LIST, "setup": SETUP_LIST},
     "fuzz": {"seconds": INT},
     "output_dir": STR,
+    "baseline": STR_LIST,
 }
+# Stages a baseline entry can name (see report.py / findings.py)
+BASELINE_STAGES = ("edge", "fuzz", "skipped")
 SETUP_KEYS = {"type": STR, "var": STR, "lines": STR_LIST}
 SEED_DICT_KEYS = {"repeat": STR, "times": INT, "prefix": STR, "suffix": STR}
 
@@ -263,6 +266,16 @@ class Config:
         fz = d.get("fuzz") or {}
         self.fuzz_seconds = int(fz.get("seconds", 10))
         self.output_dir = self._abs(d.get("output_dir") or "autofuzz-out")
+        # Known findings: "[maybe] <edge|fuzz|skipped> <program or function> <regex>"
+        from .findings import parse_expected   # no libclang import
+        self.baseline = []
+        for i, line in enumerate(d.get("baseline") or []):
+            try:
+                e = parse_expected(str(line), BASELINE_STAGES, f"{path}: baseline[{i}]")
+            except ValueError as err:
+                raise ConfigError(f"{err}. Format: '[maybe] edge|fuzz|skipped <program> <regex>'.")
+            if e is not None:
+                self.baseline.append(e)
 
         # Edge values per C type (used by scanner and generator)
         self.generic_edges: Dict[str, List[Union[int, str]]] = {t: self.string_seeds for t in _STRING_TYPES}

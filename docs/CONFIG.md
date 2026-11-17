@@ -44,6 +44,7 @@ To start, you must fill in 3 keys: `sources`, `include_dirs` and `harness.includ
 | `harness.setup` | list | `[]` | How to prepare a struct parameter before the call (see below). |
 | `fuzz.seconds` | number | `10` | Seconds per fuzzer for `autofuzz run`. `--fuzz-seconds N` overrides it. |
 | `output_dir` | path | `autofuzz-out` | Where AutoFuzz writes everything. Add it to `.gitignore`. |
+| `baseline` | list | `[]` | Known findings you do not fix yet (see below). `autofuzz run` exits 1 only for a firmware bug that is not in this list. |
 
 ### `limits.string_seeds`
 
@@ -136,6 +137,63 @@ add a setup entry for the pointed-to type. Example from the root `autofuzz.yaml`
 A `char *` parameter gets a writable copy of each text input (the function
 may change it, as `strtok` does). A `const char *` gets the text as it is.
 
+### `baseline`
+
+Findings you know about and do not fix yet: known bugs, or test-caused
+findings you have checked. With a baseline, `autofuzz run` can run in CI:
+it exits **1 only for a firmware bug that is not in the list**, and the
+report marks each firmware bug as `(known)` or `(NEW)`. A required line that
+is no longer found is listed at the top of `report.md` (a fixed bug: delete
+the line).
+
+One line per finding, in **single quotes** (so YAML keeps the backslashes):
+
+```yaml
+baseline:
+  - 'edge deterministic_edge_cli_run ASAN global-buffer-overflow ringbuf\.c:34 in ringbuf_push'
+  - 'maybe fuzz random_fuzz_cli_execute ASAN global-buffer-overflow ringbuf\.c:34 in ringbuf_push'
+  - 'skipped cpu_nop SKIPPED cpu_nop \(src/selftest\.c:\d+\): inline assembly .*'
+```
+
+- `edge` / `fuzz` + the test program, or `skipped` + the function name.
+- Then a Python regular expression that must match the **whole** finding.
+  Findings look like this (also in `report.json`, field `found_by`, and in
+  the logs):
+  - `UBSAN <kind> <file>:<line>`
+  - `ASAN <kind> <file>:<line> in <function>`
+  - `ASSERT <file>:<line> in <function>`
+  - `LIBFUZZER <reason>` (a crash without a sanitizer report)
+  - `REVIEW (<reason>) <one of the above>` (needs review)
+  - `SKIPPED <function> (<file>:<line>): <reason>`
+- `maybe` at the start: allowed, but not required. Use it for a bug that a
+  short fuzzing run finds only sometimes.
+
+The configs in this repository use it: their baselines are the known
+findings that `make test` checks.
+
+## The report
+
+After the tests, `autofuzz run` writes `report.md` and `report.json` into
+`output_dir` and prints a short summary:
+
+```
+>>> Report: 1 firmware bug(s), 0 need review, 0 skipped
+    F1   FIRMWARE BUG (known) ringbuf.c:34 in ringbuf_push: Buffer overflow in a global variable: the code reads or writes past its end.
+         repeat: autofuzz repro F1
+    Full report: .../examples/ringbuf_cli/autofuzz-out/report.md
+```
+
+Each finding has an id (`F1`, `F2`, ...), a status (`FIRMWARE BUG`,
+`NEEDS REVIEW`, `SKIPPED`), one plain sentence, the sanitizer message, the
+file, line, function and line of code, the input (the arguments of the edge
+test, or the crash file as text and hex), and the command to repeat it.
+The same bug found by the edge test and the fuzzer is shown once.
+
+```
+autofuzz repro F1        # run the program again with the same input
+autofuzz report          # write the report again from the last logs
+```
+
 ## Firmware: fake headers, stubs, skipped code, needs review
 
 - **Fake headers** (`fake_include_dirs`) replace headers that only work on the
@@ -170,12 +228,13 @@ autofuzz-out/
   build/      object files of your sources
   bin/        the test programs (run one by hand to repeat it)
   logs/       edge.log and fuzz.log
+  report.md   the report: every finding in plain words (report.json: the same as data)
   crashes/    inputs that made a fuzzer crash
   corpus/     one folder per fuzzer; inputs kept between runs
 ```
 
-`autofuzz clean` removes these folders. `autofuzz run --fresh` removes
-only `logs/`, `crashes/` and `corpus/` first.
+`autofuzz clean` removes these folders and the report. `autofuzz run --fresh`
+removes only `logs/`, `crashes/`, `corpus/` and the report first.
 
 ## Examples
 
@@ -187,8 +246,11 @@ only `logs/`, `crashes/` and `corpus/` first.
   `python3 -m autofuzz run --config Tests/legacy_thesis/autofuzz.yaml`
 - [`Tests/autofuzz_selftest/autofuzz.yaml`](../Tests/autofuzz_selftest/autofuzz.yaml):
   a tiny project with skipped functions, stubs and test-caused crashes.
+- [`examples/ringbuf_cli/autofuzz.yaml`](../examples/ringbuf_cli/autofuzz.yaml):
+  a second, unrelated C project with one bug on purpose
+  (walk-through: [GETTING_STARTED.md](GETTING_STARTED.md)).
 
-The root `make test` runs all three.
+The root `make test` runs all four.
 
 ## Same input, same output
 

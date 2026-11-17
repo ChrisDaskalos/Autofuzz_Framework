@@ -57,3 +57,7 @@ fuzz:
   seconds: 10         # seconds per fuzzer for `autofuzz run`
 
 output_dir: autofuzz-out
+
+# Known findings that are not fixed yet (see docs/CONFIG.md). `autofuzz run`
+# exits 1 only for a firmware bug that is not in this list.
+baseline: []
