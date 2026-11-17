@@ -242,6 +242,22 @@ Fix: add the folder that contains `ringbuf.h` to `include_dirs`. For a
 header that only exists on the target (a HAL, `stm32f1xx.h`), use a fake
 header in `fake_include_dirs` (see [CONFIG.md](CONFIG.md)).
 
+**A header is missing in `harness.includes`** (here `cli.h`):
+
+```
+  SKIPPED: deterministic_edge_cli_run: could not compile: .../autofuzz-out/gen/deterministic_edge_cli_run.c:19:5: error: implicit declaration of function 'cli_run' is invalid in C99 [-Werror,-Wimplicit-function-declaration]
+  SKIPPED: random_fuzz_cli_run: could not compile: .../autofuzz-out/gen/random_fuzz_cli_run.c:19:5: error: implicit declaration of function 'cli_run' is invalid in C99 [-Werror,-Wimplicit-function-declaration]
+...
+>>> Build complete: 7 edge tests, 7 fuzzers, 8 skipped
+```
+
+(clang 16 and newer word it as `call to undeclared function 'cli_run'`.)
+The generated test calls a function that no header in `harness.includes`
+declares. The other tests still run; these are left out. Fix: add the header
+that declares it (`cli.h`) to `harness.includes`. AutoFuzz makes this an
+error on purpose: older clang versions only warn and guess a wrong
+signature.
+
 **No function to test:**
 
 ```

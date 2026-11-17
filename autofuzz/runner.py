@@ -31,6 +31,9 @@ from . import review
 SUBDIRS = ("gen", "stubs", "build", "bin", "logs", "crashes", "corpus")
 
 WARN_FLAGS = ["-Wall", "-Wextra", "-g", "-O0", "-fno-omit-frame-pointer"]
+# Only for the generated tests: a function that harness.includes does not
+# declare must stop the build (clang < 16 only warns and guesses `int f()`).
+HARNESS_FLAGS = ["-Werror=implicit-function-declaration"]
 SAN_EDGE = ["-fsanitize=address,undefined", "-fno-sanitize-recover=address"]
 SAN_FUZZ = ["-fsanitize=address,undefined,integer", "-fno-sanitize-recover=all"]
 
@@ -219,7 +222,7 @@ def build(cfg: Config, out: Path, targets: List[str]) -> Dict[str, List[str]]:
                 ("fuzz", "random_fuzz_", SAN_FUZZ, ["-fsanitize=fuzzer"])):
             prog = prefix + name
             say(f"  LD ({kind})  {prog}")
-            ok, log = _cc([cfg.compiler] + common + san + [str(L.gen / f"{prog}.c")]
+            ok, log = _cc([cfg.compiler] + common + san + HARNESS_FLAGS + [str(L.gen / f"{prog}.c")]
                           + objs[kind] + link + ["-o", str(L.bin / prog)])
             if ok:
                 result[kind].append(prog)
