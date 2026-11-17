@@ -494,7 +494,7 @@ def zero_fill_types(param_types: Sequence[str], cfg: Config,
     lines += [f"{pt} autofuzz_probe_{i};" for i, pt in enumerate(wanted)]
     probe = str(cfg.base_dir / PROBE_FILE)
     try:
-        tu = index.parse(probe, args=cfg.clang_args(),
+        tu = index.parse(probe, args=cfg.libclang_args(),
                          unsaved_files=[(probe, "\n".join(lines) + "\n")])
     except cindex.TranslationUnitLoadError:
         return {}

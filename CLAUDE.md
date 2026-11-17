@@ -27,7 +27,7 @@ docker build -f Dockerfile.ubuntu20 -t autofuzz:ubuntu20 .   # Ubuntu 20.04, Pyt
 python3 -m autofuzz run [--config Tests/legacy_thesis/autofuzz.yaml] [--only edge|fuzz] [--fuzz-seconds N] [--fresh]   # default: ./autofuzz.yaml = real Core/Src
 ```
 
-Python deps: `python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt` (libclang, PyYAML). The Makefiles run the tool with `PYTHONPATH=<repo>`, so `pip install .` is optional. Must stay compatible with **Python 3.8** (no `list[int]` hints, no `match`, no `importlib.resources.files`); the developer VM is Ubuntu 20.04 + clang 10.
+Python deps: `python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt` (libclang, PyYAML). The Makefiles run the tool with `PYTHONPATH=<repo>`, so `pip install .` is optional. Test with the pinned `libclang==18.1.1` from the venv (`make test PYTHON=.venv/bin/python`), as CI does: a system `python3-clang` (e.g. libclang 10 on Ubuntu 20.04) spells some types differently. Must stay compatible with **Python 3.8** (no `list[int]` hints, no `match`, no `importlib.resources.files`); the developer VM is Ubuntu 20.04 + clang 10.
 
 Running a subset:
 - `make -C Tests/legacy_thesis unit|edge|fuzz` (each requires `make build` first).

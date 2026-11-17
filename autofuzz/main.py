@@ -36,7 +36,11 @@ def _param_types_and_names(fn: cindex.Cursor) -> Tuple[List[str], List[str]]:
         args = []
     for a in args:
         try:
-            pts.append(a.type.get_canonical().spelling.strip())
+            canon = a.type.get_canonical().spelling.strip()
+            # A typedef of an anonymous struct (typedef struct {...} ringbuf_t;)
+            # has no usable canonical name in newer libclang:
+            # "struct (unnamed at ringbuf.h:13:9) *". Keep the typedef name then.
+            pts.append(a.type.spelling.strip() if "(unnamed" in canon or "(anonymous" in canon else canon)
         except Exception:
             pts.append(a.type.spelling.strip())
         try:
@@ -131,7 +135,7 @@ def generate(cfg: Config, out_dir: Path, quiet: bool = False) -> List[str]:
     skipped: List[str] = []   # "name (file:line): reason"
     for src in cfg.sources:
         try:
-            tu = index.parse(str(src), args=cfg.clang_args())
+            tu = index.parse(str(src), args=cfg.libclang_args())
         except cindex.TranslationUnitLoadError:
             tu = None
         targets = scanner.extract_targets(tu, src) if tu is not None else []

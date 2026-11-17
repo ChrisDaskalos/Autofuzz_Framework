@@ -266,6 +266,7 @@ class Config:
         fz = d.get("fuzz") or {}
         self.fuzz_seconds = int(fz.get("seconds", 10))
         self.output_dir = self._abs(d.get("output_dir") or "autofuzz-out")
+        self._resource_dir: Optional[str] = None   # see libclang_args()
         # Known findings: "[maybe] <edge|fuzz|skipped> <program or function> <regex>"
         from .findings import parse_expected   # no libclang import
         self.baseline = []
@@ -306,6 +307,25 @@ class Config:
         args += [f"-I{p}" for p in self.fake_include_dirs]
         args += [f"-I{p}" for p in self.include_dirs]
         return args
+
+    def libclang_args(self) -> List[str]:
+        """clang_args() for parsing with libclang. The pip package "libclang"
+        does not ship clang's own headers (stddef.h, stdint.h, ...); without
+        them NULL, size_t etc. are unknown and parts of the code do not parse.
+        So use the resource dir of the compiler that builds the tests."""
+        if self._resource_dir is None:
+            self._resource_dir = ""
+            try:
+                import subprocess
+                r = subprocess.run([self.compiler, "-print-resource-dir"], stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL, universal_newlines=True, timeout=30)
+                d = r.stdout.strip()
+                if r.returncode == 0 and d and Path(d, "include").is_dir():
+                    self._resource_dir = d
+            except (OSError, subprocess.SubprocessError):
+                pass
+        extra = ["-resource-dir", self._resource_dir] if self._resource_dir else []
+        return self.clang_args() + extra
 
     def wants_function(self, name: str) -> bool:
         if self.functions_include and not any(fnmatch.fnmatchcase(name, p) for p in self.functions_include):

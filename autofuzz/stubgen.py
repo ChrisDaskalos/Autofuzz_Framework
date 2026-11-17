@@ -85,7 +85,7 @@ def find(cfg: Config, index: Optional[cindex.Index] = None) -> Stubs:
     tus = []
     for src in cfg.sources:
         try:
-            tus.append(index.parse(str(src), args=cfg.clang_args()))
+            tus.append(index.parse(str(src), args=cfg.libclang_args()))
         except cindex.TranslationUnitLoadError:
             continue
     defined = _defined_names(tus, src_files)
