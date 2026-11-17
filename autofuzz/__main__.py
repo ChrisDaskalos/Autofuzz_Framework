@@ -6,7 +6,10 @@ AutoFuzz command line.
   autofuzz check      check that clang, CMocka, libFuzzer and libclang are installed
   autofuzz generate   write the test sources into <output_dir>/gen
   autofuzz build      generate + compile
-  autofuzz run        check + generate + compile + run edge tests and fuzzers
+  autofuzz run        check + generate + compile + run edge tests and fuzzers,
+                      then write the report (<output_dir>/report.md)
+  autofuzz report     write the report again from the last run
+  autofuzz repro ID   repeat finding ID (F1, F2, ...) of the report
   autofuzz clean      remove what AutoFuzz created in <output_dir>
 
 `autofuzz` is the same as `python3 -m autofuzz`.
@@ -17,6 +20,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from . import config as config_mod
+from . import report
 from . import runner
 
 TEMPLATE = Path(__file__).resolve().parent / "init_template.yaml"
@@ -117,7 +121,46 @@ def cmd_run(args) -> int:
     print(f">>> {found} program(s) found something. Logs: {L.logs}  Crash inputs: {L.crashes}")
     for s in built["skipped"]:
         print(f"    SKIPPED: {s}")
-    return 1 if found else 0
+    return _report(args, cfg, out, built["skipped"])
+
+
+def _report(args, cfg, out: Path, build_skipped=()) -> int:
+    """Write report.md/report.json, print the summary.
+    Exit code: 1 if there is a firmware bug, else 0."""
+    findings = report.collect(out, (), build_skipped)
+    items = report.write(out, findings, args.config or "")
+    print("")
+    for line in report.summary(items, out, args.config or ""):
+        print(line)
+    new = [i for i in items if i["status"] == "FIRMWARE BUG" and not i["known"]]
+    return 1 if new else 0
+
+
+def cmd_report(args) -> int:
+    cfg = _load(args)
+    out = _out(args, cfg)
+    if not (out / "logs").is_dir():
+        print(f"autofuzz: no logs in {out}. Run `autofuzz run` first.", file=sys.stderr)
+        return 2
+    return _report(args, cfg, out)
+
+
+def cmd_repro(args) -> int:
+    cfg = _load(args)
+    out = _out(args, cfg)
+    items = {i["id"]: i for i in report.load(out)}
+    item = items.get(args.id.upper())
+    if item is None:
+        known = ", ".join(sorted(items, key=lambda k: int(k[1:]))) or "none; run `autofuzz run` first"
+        print(f"autofuzz: no finding {args.id} in {out / report.REPORT_JSON} (ids: {known})", file=sys.stderr)
+        return 2
+    if not item["command"]:
+        print(f"autofuzz: {item['id']} is {item['status']}: nothing to run. {item['sentence']}")
+        return 0
+    where = f"{item['file']}:{item['line']}" + (f" in {item['function']}" if item["function"] else "")
+    print(f">>> {item['id']} {item['status']}: {where}")
+    print(f">>> cd {out} && {' '.join(item['command'])}")
+    return runner.repro(out, item["command"])
 
 
 def cmd_clean(args) -> int:
@@ -144,7 +187,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                           ("build", cmd_build, "generate and compile"),
                           ("clean", cmd_clean, "remove the files AutoFuzz created")):
         add(name, func, h).add_argument("--output-dir", metavar="DIR", help="instead of output_dir from the config")
-    p = add("run", cmd_run, "check tools, generate, compile, run")
+    p = add("report", cmd_report, "write the report again from the last run")
+    p.add_argument("--output-dir", metavar="DIR", help="instead of output_dir from the config")
+    p = add("repro", cmd_repro, "repeat one finding of the report (e.g. F1)")
+    p.add_argument("id", help="finding id from the report, e.g. F1")
+    p.add_argument("--output-dir", metavar="DIR", help="instead of output_dir from the config")
+    p = add("run", cmd_run, "check tools, generate, compile, run, report")
     p.add_argument("--output-dir", metavar="DIR", help="instead of output_dir from the config")
     p.add_argument("--only", choices=["edge", "fuzz"], help="run only the edge tests or only the fuzzers")
     p.add_argument("--fuzz-seconds", type=int, metavar="N", help="seconds per fuzzer (instead of fuzz.seconds)")

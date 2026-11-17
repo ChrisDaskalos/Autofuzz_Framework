@@ -29,6 +29,7 @@ from .config import Config, PACKAGE_DIR
 from . import review
 
 SUBDIRS = ("gen", "stubs", "build", "bin", "logs", "crashes", "corpus")
+FILES = ("report.md", "report.json")
 
 WARN_FLAGS = ["-Wall", "-Wextra", "-g", "-O0", "-fno-omit-frame-pointer"]
 # Only for the generated tests: a function that harness.includes does not
@@ -305,6 +306,14 @@ def run_fuzz(L: Layout, progs: List[str], seconds: int, dirs: List[Tuple[str, Pa
     return found
 
 
+def repro(out: Path, command: List[str]) -> int:
+    """Run one repeat command from the report in out, with the same settings
+    as the test run. Its output goes straight to the terminal."""
+    env = dict(os.environ)
+    env.update(RUN_ENV)
+    return subprocess.run(command, cwd=str(out), env=env).returncode
+
+
 def clean(out: Path) -> List[Path]:
     """Remove only the folders AutoFuzz creates. Never the whole output_dir
     unless it is empty afterwards."""
@@ -314,6 +323,9 @@ def clean(out: Path) -> List[Path]:
         if p.exists():
             shutil.rmtree(p)
             removed.append(p)
+    for name in FILES:
+        if (out / name).exists():
+            (out / name).unlink()
     try:
         out.rmdir()
     except OSError:
@@ -326,3 +338,6 @@ def reset_fuzz_state(out: Path) -> None:
     for sub in ("logs", "crashes", "corpus"):
         if (out / sub).exists():
             shutil.rmtree(out / sub)
+    for name in FILES:
+        if (out / name).exists():
+            (out / name).unlink()
