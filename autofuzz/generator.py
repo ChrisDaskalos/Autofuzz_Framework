@@ -13,7 +13,7 @@ import re
 import itertools
 
 from .config import Config, SetupEntry
-from .review import NULL_ARGS_TAG
+from .review import NULL_ARGS_TAG, ZERO_ARGS_TAG
 
 # ─────────────────────────────────────────────────────────────────────
 # Type detection helpers
@@ -391,20 +391,45 @@ def _generate_test_combinations(seeds_per_param: List[List[str]],
 # ─────────────────────────────────────────────────────────────────────
 # Edge harness generation (CMocka-based deterministic tests)
 # ─────────────────────────────────────────────────────────────────────
-def _null_args_line(param_types: Sequence[str], setups: Dict[int, SetupEntry]) -> List[str]:
-    """A pointer parameter (not char *) with no harness.setup entry gets NULL.
-    Say so in the harness; the runner then marks a NULL crash as needs review."""
+def _zero_args(param_types: Sequence[str], setups: Dict[int, SetupEntry],
+               zero_types: Optional[Dict[str, str]]) -> Dict[int, str]:
+    """Pointer parameters (not char *) with no harness.setup entry whose type
+    the test can create: {index: pointee type}. They get a zero-filled object."""
+    zero_types = zero_types or {}
+    return {i: zero_types[pt] for i, pt in enumerate(param_types)
+            if i not in setups and _is_pointer(pt) and not _is_string(pt) and pt in zero_types}
+
+def _zero_var(i: int) -> str:
+    return f"afz_zero_a{i}"
+
+def _zero_lines(zero: Dict[int, str], indent: str = "    ") -> List[str]:
+    """One zero-filled object per such parameter; the call gets its address."""
+    return [f"{indent}{zero[i]} {_zero_var(i)} = {{0}};" for i in sorted(zero)]
+
+def _null_args_line(param_types: Sequence[str], setups: Dict[int, SetupEntry],
+                    zero: Optional[Dict[int, str]] = None) -> List[str]:
+    """A pointer parameter (not char *) with no harness.setup entry gets a
+    zero-filled object if the test can create its type, else NULL.
+    Say so in the harness; the runner then marks a crash that these can cause
+    as needs review."""
+    zero = zero or {}
+    out: List[str] = []
+    zeros = [f"argument {i + 1} ({param_types[i]})" for i in sorted(zero)]
+    if zeros:
+        out.append(f"/* {ZERO_ARGS_TAG} {', '.join(zeros)}."
+                   " Add a harness.setup entry for this type to test with real data. */")
     nulls = [f"argument {i + 1} ({pt})" for i, pt in enumerate(param_types)
-             if i not in setups and _is_pointer(pt) and not _is_string(pt)]
-    if not nulls:
-        return []
-    return [f"/* {NULL_ARGS_TAG} {', '.join(nulls)} */", ""]
+             if i not in setups and i not in zero and _is_pointer(pt) and not _is_string(pt)]
+    if nulls:
+        out.append(f"/* {NULL_ARGS_TAG} {', '.join(nulls)} */")
+    return out + [""] if out else []
 
 
 def _includes(cfg: Config) -> List[str]:
     return [f'#include "{h}"' for h in cfg.harness_includes]
 
-def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequence[Set[str]], cfg: Config) -> str:
+def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequence[Set[str]], cfg: Config,
+                           zero_types: Optional[Dict[str, str]] = None) -> str:
     """Generate CMocka test harness with edge cases for deterministic testing."""
     out: List[str] = [
         '#include <stdarg.h>',
@@ -418,12 +443,14 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
     ] + _includes(cfg) + ['']
 
     setups = _setups(func, param_types, cfg)
-    out += _null_args_line(param_types, setups)
+    zero = _zero_args(param_types, setups, zero_types)
+    out += _null_args_line(param_types, setups, zero)
+    prepared = set(setups) | set(zero)
 
     # Generate seed arrays for each parameter
     seeds_per_param: List[List[str]] = []
     for i, pt in enumerate(param_types):
-        if i in setups:
+        if i in prepared:
             seeds_per_param.append([])
             continue
         
@@ -441,7 +468,7 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
         out.append("")
 
     # Generate test combinations
-    test_combinations = _generate_test_combinations(seeds_per_param, set(setups), max_tests=12)
+    test_combinations = _generate_test_combinations(seeds_per_param, prepared, max_tests=12)
 
     # Generate individual test functions
     test_names: List[str] = []
@@ -455,11 +482,12 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
 
         # Prepared structs (harness.setup in autofuzz.yaml)
         body += _setup_lines(func, setups)
+        body += _zero_lines(zero)
 
         # Declare and initialize parameters with values from combination
         value_idx = 0
         for i, pt in enumerate(param_types):
-            if i in setups:
+            if i in prepared:
                 continue
             
             # Get value from combination
@@ -486,9 +514,7 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
             value_idx += 1
 
         # Make the actual function call
-        call_args = []
-        for i in range(len(param_types)):
-            call_args.append(f"&{setups[i].var}" if i in setups else f"a{i}")
+        call_args = [_call_arg(i, setups, zero) for i in range(len(param_types))]
 
         body.append("")
         body.append("    /* Call target function */")
@@ -518,7 +544,15 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
 # ─────────────────────────────────────────────────────────────────────
 # libFuzzer harness generation (Random fuzzing)
 # ─────────────────────────────────────────────────────────────────────
-def _emit_libfuzzer_harness_src(func: str, param_types: Sequence[str], cfg: Config) -> str:
+def _call_arg(i: int, setups: Dict[int, SetupEntry], zero: Dict[int, str]) -> str:
+    if i in setups:
+        return f"&{setups[i].var}"
+    if i in zero:
+        return f"&{_zero_var(i)}"
+    return f"a{i}"
+
+def _emit_libfuzzer_harness_src(func: str, param_types: Sequence[str], cfg: Config,
+                                zero_types: Optional[Dict[str, str]] = None) -> str:
     """Generate libFuzzer harness for random fuzzing, honoring limits.buffer_size."""
     out: List[str] = [
         '#include <stdint.h>',
@@ -533,7 +567,8 @@ def _emit_libfuzzer_harness_src(func: str, param_types: Sequence[str], cfg: Conf
     ]
 
     setups = _setups(func, param_types, cfg)
-    out += _null_args_line(param_types, setups)
+    zero = _zero_args(param_types, setups, zero_types)
+    out += _null_args_line(param_types, setups, zero)
     has_strings = any(_is_string(pt) for pt in param_types)
 
     # Generic string-based fuzzing
@@ -551,12 +586,14 @@ def _emit_libfuzzer_harness_src(func: str, param_types: Sequence[str], cfg: Conf
 
         if setups:
             out += ['    /* Setup (harness.setup in autofuzz.yaml) */'] + _setup_lines(func, setups) + ['']
+        if zero:
+            out += ['    /* Zero-filled objects for pointer parameters */'] + _zero_lines(zero) + ['']
 
         # Build call arguments
         call_args = []
         for i, pt in enumerate(param_types):
-            if i in setups:
-                call_args.append(f"&{setups[i].var}")
+            if i in setups or i in zero:
+                call_args.append(_call_arg(i, setups, zero))
             elif _is_string(pt):
                 call_args.append("buf")
             elif _is_pointer(pt):
@@ -583,11 +620,13 @@ def _emit_libfuzzer_harness_src(func: str, param_types: Sequence[str], cfg: Conf
 
     if setups:
         out += ['    /* Setup (harness.setup in autofuzz.yaml) */'] + _setup_lines(func, setups) + ['']
+    if zero:
+        out += ['    /* Zero-filled objects for pointer parameters */'] + _zero_lines(zero) + ['']
 
     # Extract integers from data bytes
     offset = 0
     for i, pt in enumerate(param_types):
-        if i in setups:
+        if i in setups or i in zero:
             continue
         if _is_pointer(pt) and not _is_string(pt):
             out.append(f'    {pt} a{i} = NULL;')
@@ -602,9 +641,7 @@ def _emit_libfuzzer_harness_src(func: str, param_types: Sequence[str], cfg: Conf
     out.append('')
 
     # Build call
-    call_args = []
-    for i in range(len(param_types)):
-        call_args.append(f"&{setups[i].var}" if i in setups else f"a{i}")
+    call_args = [_call_arg(i, setups, zero) for i in range(len(param_types))]
 
     out += [
         '    /* Call target function with fuzzer-derived inputs */',
@@ -623,13 +660,18 @@ def _write(out_dir: Path, name: str, src: str) -> None:
     (out_dir / name).write_text(src, encoding="utf-8")
 
 def emit_edge_harness(func: str, param_types: Sequence[str], edges: Sequence[Set[str]],
-                      out_dir: Path, cfg: Config) -> None:
-    """Emit CMocka-based deterministic edge case tests."""
-    _write(out_dir, f"deterministic_edge_{func}.c", _emit_edge_harness_src(func, param_types, edges, cfg))
+                      out_dir: Path, cfg: Config, zero_types: Optional[Dict[str, str]] = None) -> None:
+    """Emit CMocka-based deterministic edge case tests.
+    zero_types: {pointer type: pointee type} that get a zero-filled object
+    instead of NULL (scanner.zero_fill_types)."""
+    _write(out_dir, f"deterministic_edge_{func}.c",
+           _emit_edge_harness_src(func, param_types, edges, cfg, zero_types))
 
-def emit_libfuzzer_harness(func: str, param_types: Sequence[str], out_dir: Path, cfg: Config) -> None:
+def emit_libfuzzer_harness(func: str, param_types: Sequence[str], out_dir: Path, cfg: Config,
+                           zero_types: Optional[Dict[str, str]] = None) -> None:
     """Emit libFuzzer harness for random fuzzing."""
-    _write(out_dir, f"random_fuzz_{func}.c", _emit_libfuzzer_harness_src(func, param_types, cfg))
+    _write(out_dir, f"random_fuzz_{func}.c",
+           _emit_libfuzzer_harness_src(func, param_types, cfg, zero_types))
 
 __all__ = [
     "emit_edge_harness",

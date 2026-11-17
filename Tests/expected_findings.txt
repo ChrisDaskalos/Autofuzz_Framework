@@ -18,6 +18,7 @@
 #              SKIPPED <function> (<file>:<line>): <reason>
 #              ASSERT <file>:<line> in <function>
 #              REVIEW (<reason>) <one of the above>   <- caused by the test, not a firmware bug
+#                (reason: NULL argument | zero-filled argument | top frame in ...)
 #
 # A line that starts with "maybe" is allowed but not required: a known bug
 # that a short random fuzzing run finds in some runs and not in others.
@@ -65,6 +66,10 @@ skipped  self  SKIPPED led_on \(src/selftest\.c:\d+\): casts an integer constant
 skipped  self  SKIPPED run_forever \(src/selftest\.c:\d+\): never returns .*
 
 # --- AutoFuzz self-test: crashes caused by the test, marked "needs review"
-self-edge  deterministic_edge_first_item  REVIEW \(NULL argument\) .*selftest\.c:\d+.*
-self-fuzz  random_fuzz_first_item         REVIEW \(NULL argument\) .*selftest\.c:\d+.*
+# NULL stays for a type the test cannot create (struct sensor is opaque in selftest.h)
+self-edge  deterministic_edge_sensor_value  REVIEW \(NULL argument\) UBSAN null-pointer-use selftest\.c:\d+
+self-fuzz  random_fuzz_sensor_value         REVIEW \(NULL argument\) UBSAN null-pointer-use selftest\.c:\d+
+# sum3 reads 3 ints; the test passed ONE zero-filled int (first_item reads 1: no finding)
+self-edge  deterministic_edge_sum3          REVIEW \(zero-filled argument\) ASAN stack-buffer-overflow selftest\.c:\d+ in sum3
+self-fuzz  random_fuzz_sum3                 REVIEW \(zero-filled argument\) ASAN stack-buffer-overflow selftest\.c:\d+ in sum3
 self-fuzz  random_fuzz_ratio              REVIEW \(top frame in fake header\) UBSAN integer-divide-by-zero board\.h:\d+

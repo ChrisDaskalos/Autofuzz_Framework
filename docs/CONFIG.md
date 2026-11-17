@@ -103,11 +103,28 @@ variable is declared.
 ### Pointer parameters without `harness.setup`
 
 A pointer parameter (other than `char *`) with no `harness.setup` entry gets
-**NULL**. Each generated file then says so in a comment
-(`/* AUTOFUZZ-NULL-ARGS: argument 1 (const int *) */`). If the function crashes
-on that NULL, the finding is marked **needs review (NULL argument)**, not
-counted as a firmware bug. To test the function for real, add a setup entry
-for the pointed-to type. Example from the root `autofuzz.yaml`:
+the address of **one zero-filled object** of its type:
+
+```c
+/* AUTOFUZZ-ZERO-ARGS: argument 3 (unsigned long *). Add a harness.setup entry for this type to test with real data. */
+...
+unsigned long afz_zero_a2 = {0};
+cli_parse_uint(a0, a1, &afz_zero_a2);
+```
+
+If the function reads or writes past that one object (it expected an array),
+or hits a NULL pointer inside it (a zero-filled struct has NULL pointer
+fields), the finding is marked **needs review (zero-filled argument)**.
+
+It gets **NULL** only when the test cannot create the type: `void *`, a
+function pointer, a pointer to an array, or a struct that the headers in
+`harness.includes` only declare (`struct sensor;`, defined in a `.c` file).
+AutoFuzz checks this with those headers alone, as the generated test sees
+them. Then the comment is `/* AUTOFUZZ-NULL-ARGS: argument 1 (const struct sensor *) */`,
+and a crash on that NULL is marked **needs review (NULL argument)**.
+
+Neither is counted as a firmware bug. To test the function with real data,
+add a setup entry for the pointed-to type. Example from the root `autofuzz.yaml`:
 
 ```yaml
     - type: uint8_t          # Servo_Ramp(uint8_t *currentAngle, ...)
@@ -136,7 +153,8 @@ may change it, as `strtok` does). A `const char *` gets the text as it is.
   endless loop with no `break`, `return` or `goto`, as in `main`). To leave out
   other functions, use `functions.exclude`.
 - **Needs review**: a finding whose top stack frame is in a generated harness,
-  a stub or a fake header, or a NULL crash on a NULL argument, gets the line
+  a stub or a fake header, a NULL crash on a NULL argument, or a crash on a
+  zero-filled argument (see above), gets the line
   `AUTOFUZZ: NEEDS REVIEW (<reason>): ...` in the log. It may be caused by the
   test, so it is not counted as a firmware bug.
 

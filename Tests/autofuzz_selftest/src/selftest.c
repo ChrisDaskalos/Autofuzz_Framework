@@ -6,7 +6,11 @@
  *   - the 3 functions marked SKIP are reported as SKIPPED with the reason;
  *   - the other functions are tested and find nothing;
  *   - board_name() gets a stub that returns NULL, and a warning;
- *   - first_item() crashes only because the test passes NULL:
+ *   - first_item() gets a zero-filled int instead of NULL and finds nothing;
+ *   - sum3() reads 3 ints, but the test passed ONE zero-filled int:
+ *     REVIEW (zero-filled argument), not a firmware bug;
+ *   - sensor_value() gets NULL (struct sensor is opaque in selftest.h, so
+ *     the test cannot create one) and crashes only because of that:
  *     REVIEW (NULL argument), not a firmware bug;
  *   - ratio() crashes inside the fake header board.h:
  *     REVIEW (top frame in fake header), not a firmware bug.
@@ -42,10 +46,28 @@ int has_name(void)
     return board_name() != NULL;
 }
 
-/* Tested: the test has no setup for `const int *`, so it passes NULL. */
+/* Tested: the test has no setup for `const int *`, so it passes a
+ * zero-filled int. Reading items[0] is fine. */
 int first_item(const int *items)
 {
     return items[0];
+}
+
+/* Tested: the zero-filled int is only one int; items[1] is past it. */
+int sum3(const int *items)
+{
+    return items[0] + items[1] + items[2];
+}
+
+/* Complete here, opaque in selftest.h. */
+struct sensor {
+    int value;
+};
+
+/* Tested: the test cannot create a struct sensor, so it passes NULL. */
+int sensor_value(const struct sensor *s)
+{
+    return s->value;
 }
 
 /* Tested: the crash (b == 0) happens in the fake header. */

@@ -64,8 +64,8 @@ when the findings are exactly the ones in
   unit       5 findings  (expected: 5 required; new: 0)
   edge       2 findings  (expected: 2 required; new: 0)
   fuzz       1 findings  (expected: 1 required + 1 maybe; new: 0)
-  self-edge  1 findings  (expected: 1 required; new: 0)  [1 need review, not firmware bugs]
-  self-fuzz  2 findings  (expected: 2 required; new: 0)  [2 need review, not firmware bugs]
+  self-edge  2 findings  (expected: 2 required; new: 0)  [2 need review, not firmware bugs]
+  self-fuzz  3 findings  (expected: 3 required; new: 0)  [3 need review, not firmware bugs]
   real-edge  3 findings  (expected: 3 required; new: 0)
   real-fuzz  2 findings  (expected: 2 required + 1 maybe; new: 0)
   ex-edge    1 findings  (expected: 1 required; new: 0)

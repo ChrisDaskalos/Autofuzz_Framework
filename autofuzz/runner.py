@@ -234,7 +234,7 @@ def build(cfg: Config, out: Path, targets: List[str]) -> Dict[str, List[str]]:
 # 4. Run
 # ---------------------------------------------------------------------------
 def _run_logged(cmd: List[str], cwd: Path, log, header: str, timeout: int,
-                review_ctx: Optional[Tuple[str, List[Tuple[str, Path]]]] = None) -> Tuple[int, List[str]]:
+                review_ctx: Optional[Tuple[str, List[Tuple[str, Path]], str]] = None) -> Tuple[int, List[str]]:
     env = dict(os.environ)
     env.update(RUN_ENV)
     log.write(f"\n{header}\n")
@@ -251,7 +251,7 @@ def _run_logged(cmd: List[str], cwd: Path, log, header: str, timeout: int,
     log.write(text)
     lines = [ln for ln in text.splitlines() if SUMMARY_RE.search(ln) and not ln.startswith("[  FAILED  ] tests:")]
     if review_ctx is not None:
-        for reason, key in review.classify(text, review_ctx[0], review_ctx[1]):
+        for reason, key in review.classify(text, review_ctx[0], review_ctx[1], review_ctx[2]):
             marker = f"{review.MARKER} ({reason}): {key}"
             log.write(marker + "\n")
             lines.append(marker)
@@ -261,7 +261,8 @@ def _run_logged(cmd: List[str], cwd: Path, log, header: str, timeout: int,
 
 def _review_ctx(L: Layout, prog: str, dirs: List[Tuple[str, Path]]):
     src = L.gen / f"{prog}.c"
-    return (review.null_args(src.read_text(encoding="utf-8")) if src.is_file() else "", dirs)
+    text = src.read_text(encoding="utf-8") if src.is_file() else ""
+    return (review.null_args(text), dirs, review.zero_args(text))
 
 
 def run_edge(L: Layout, progs: List[str], dirs: List[Tuple[str, Path]]) -> int:

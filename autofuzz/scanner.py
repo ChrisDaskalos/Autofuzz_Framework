@@ -454,3 +454,58 @@ def skip_reason(fn: cindex.Cursor) -> Optional[str]:
         if node.kind in _LOOP_KINDS and _always_true_loop(node) and not _can_leave(node):
             return "never returns (endless loop with no break or return)"
     return None
+
+
+# ---------------------------------------------------------------------------
+# Which pointer parameters can get a zero-filled object instead of NULL
+# ---------------------------------------------------------------------------
+PROBE_FILE = "__autofuzz_probe.c"
+
+
+def _creatable(pointee: cindex.Type) -> bool:
+    """True if `<pointee> x = {0};` compiles: a complete object type."""
+    canon = pointee.get_canonical()
+    if canon.kind in (cindex.TypeKind.VOID, cindex.TypeKind.FUNCTIONPROTO,
+                      cindex.TypeKind.FUNCTIONNOPROTO):
+        return False
+    spelling = pointee.spelling
+    if "(" in spelling or "[" in spelling:   # arrays, function pointers: no simple declaration
+        return False
+    return pointee.get_size() > 0            # < 0: incomplete (e.g. an opaque struct)
+
+
+def zero_fill_types(param_types: Sequence[str], cfg: Config,
+                    index: Optional[cindex.Index] = None) -> Dict[str, str]:
+    """
+    {pointer type: pointee type} for the pointer parameters (not `char *`)
+    that a generated test can create as a zero-filled object.
+
+    The check is done as the generated test sees the types: only with the
+    headers in harness.includes. A struct that the header only declares
+    (`struct sensor;`) is incomplete there, so it keeps NULL. So do void *
+    and function pointers. If the headers do not parse, everything keeps NULL.
+    """
+    wanted = sorted({pt for pt in param_types
+                     if "*" in pt and "char*" not in pt.replace("const", "").replace(" ", "")})
+    if not wanted:
+        return {}
+    index = index or cindex.Index.create()
+    lines = [f'#include "{h}"' for h in cfg.harness_includes]
+    lines += [f"{pt} autofuzz_probe_{i};" for i, pt in enumerate(wanted)]
+    probe = str(cfg.base_dir / PROBE_FILE)
+    try:
+        tu = index.parse(probe, args=cfg.clang_args(),
+                         unsaved_files=[(probe, "\n".join(lines) + "\n")])
+    except cindex.TranslationUnitLoadError:
+        return {}
+    if any(d.severity >= cindex.Diagnostic.Error for d in tu.diagnostics):
+        return {}
+    out: Dict[str, str] = {}
+    for cur in tu.cursor.get_children():
+        if cur.kind != cindex.CursorKind.VAR_DECL or not cur.spelling.startswith("autofuzz_probe_"):
+            continue
+        pt = wanted[int(cur.spelling[len("autofuzz_probe_"):])]
+        pointee = cur.type.get_pointee()
+        if _creatable(pointee):
+            out[pt] = pointee.spelling
+    return out

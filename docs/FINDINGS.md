@@ -178,10 +178,15 @@ A finding is marked **needs review** (`REVIEW (...)` in the results), and is not
 counted as a firmware bug, when the test may have caused it:
 
 - its top stack frame is in a generated harness, a stub or a fake header; or
-- it is a NULL-pointer crash, and the test passed NULL for a pointer argument.
-  A pointer parameter (other than `char *`) with no `harness.setup` entry gets NULL.
+- it is a NULL-pointer crash, and the test passed NULL for a pointer argument
+  (only for types the test cannot create: `void *`, an opaque struct); or
+- the test passed a zero-filled object for a pointer argument (a pointer
+  parameter with no `harness.setup` entry), and the function read past it or
+  hit a NULL pointer inside it.
 
-`Tests/autofuzz_selftest/` shows both cases.
+`Tests/autofuzz_selftest/` shows all three cases. The legacy and real configs
+give every pointer parameter a `harness.setup`, so none of their findings
+depend on this.
 
 ---
 

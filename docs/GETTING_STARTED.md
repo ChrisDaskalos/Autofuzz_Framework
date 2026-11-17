@@ -64,9 +64,11 @@ That is already enough to run. All keys: [CONFIG.md](CONFIG.md).
 ## 3. Tell AutoFuzz about your inputs (optional, but it finds much more)
 
 **Pointer parameters.** `ringbuf_push(ringbuf_t *rb, uint8_t value)` needs a
-real ring buffer. Without help AutoFuzz passes `NULL`, and a crash on that
-NULL would be marked *needs review* (it is caused by the test, not by your
-code). Tell it how to prepare one:
+real ring buffer. Without help AutoFuzz passes one zero-filled `ringbuf_t`:
+its `data` is NULL and `cap` is 0, so every push is refused and nothing
+interesting is tested. (If a crash comes from such an object, it is marked
+*needs review*: it is caused by the test, not by your code. A type the test
+cannot create, like `void *`, gets NULL.) Tell it how to prepare a real one:
 
 ```yaml
 harness:
@@ -169,7 +171,7 @@ The cause is two lines further down:
 back to 0 (see [the example's README](../examples/ringbuf_cli/README.md)).
 
 If the top frame is in AutoFuzz's own code (`gen/`, `stubs/`, fake headers)
-or the crash is on a NULL that AutoFuzz passed, the log also says
+or the crash is on a NULL or zero-filled argument that AutoFuzz passed, the log also says
 `AUTOFUZZ: NEEDS REVIEW (...)`: then check the test, not your code first.
 
 ## 6. Repeat it
@@ -286,14 +288,21 @@ add the real `.c` file that defines it to `sources`, or a fake in
 `fake_include_dirs`.
 
 ```
-AUTOFUZZ: NEEDS REVIEW (NULL argument: the test passed NULL for argument 1 (const int *)): SUMMARY: UndefinedBehaviorSanitizer: nullptr-with-offset .../src/selftest.c:48:12 in
+AUTOFUZZ: NEEDS REVIEW (zero-filled argument: the test passed a zero-filled object for argument 1 (const int *); add a harness.setup entry for its type): SUMMARY: AddressSanitizer: stack-buffer-overflow .../src/selftest.c:59:23 in sum3
+AUTOFUZZ: NEEDS REVIEW (NULL argument: the test passed NULL for argument 1 (const struct sensor *)): SUMMARY: UndefinedBehaviorSanitizer: null-pointer-use .../src/selftest.c:70:15 in
 AUTOFUZZ: NEEDS REVIEW (top frame in fake header: board.h): SUMMARY: UndefinedBehaviorSanitizer: integer-divide-by-zero .../fakes/board.h:19:14 in
 ```
 
-The crash is probably caused by the test, not by your code. Either AutoFuzz
-passed NULL for a pointer parameter, or the crash is inside a fake header or
-stub. Fix: add a `harness.setup` entry for that type (step 3), or fix the fake.
-If your function really must handle NULL, it is a real bug after all.
+The crash is probably caused by the test, not by your code:
+
+- **zero-filled argument**: AutoFuzz passed ONE zero-filled object, and
+  `sum3` reads three `int`s from it (it expects an array).
+- **NULL argument**: AutoFuzz cannot create a `struct sensor` (the header
+  only declares it), so it passed NULL.
+- **top frame in fake header**: the crash is inside a fake header or stub.
+
+Fix: add a `harness.setup` entry for that type (step 3), or fix the fake.
+If your function really must handle that input, it is a real bug after all.
 
 ## 8. Keep it running
 

@@ -156,12 +156,14 @@ def generate(cfg: Config, out_dir: Path, quiet: bool = False) -> List[str]:
             found[name] = (ptypes, [set() for _ in ptypes])  # empty -> defaults per type
 
     names = sorted(found)
+    # Pointer parameters that get a zero-filled object instead of NULL
+    zero_types = scanner.zero_fill_types([pt for n in names for pt in found[n][0]], cfg, index)
     if skipped:
         (out_dir / SKIPPED_FILE).write_text("".join(s + "\n" for s in sorted(skipped)), encoding="utf-8")
     for name in names:
         ptypes, edges = found[name]
-        generator.emit_edge_harness(name, ptypes, edges, out_dir, cfg)
-        generator.emit_libfuzzer_harness(name, ptypes, out_dir, cfg)
+        generator.emit_edge_harness(name, ptypes, edges, out_dir, cfg, zero_types)
+        generator.emit_libfuzzer_harness(name, ptypes, out_dir, cfg, zero_types)
 
     if not quiet:
         if names:
