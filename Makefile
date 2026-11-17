@@ -68,8 +68,8 @@ check-determinism:
 > @rm -rf $(RESULTS)/determinism
 > @PYTHONHASHSEED=1 $(AUTOFUZZ) generate --config $(LEGACY_CFG) --output-dir $(RESULTS)/determinism/a >/dev/null
 > @PYTHONHASHSEED=2 $(AUTOFUZZ) generate --config $(LEGACY_CFG) --output-dir $(RESULTS)/determinism/b >/dev/null
-> @diff -r $(RESULTS)/determinism/a/gen $(RESULTS)/determinism/b/gen \
->   && echo ">>> Determinism: generating twice gives identical files ($$(ls $(RESULTS)/determinism/a/gen | wc -l) files)"
+> @diff -r $(RESULTS)/determinism/a $(RESULTS)/determinism/b \
+>   && echo ">>> Determinism: generating twice gives identical files ($$(find $(RESULTS)/determinism/a -type f | wc -l) files)"
 > @rm -rf $(RESULTS)/determinism
 
 # Both fuzz suites always run; the exit code is 1 if either found something.

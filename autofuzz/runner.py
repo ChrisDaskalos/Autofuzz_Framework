@@ -6,6 +6,7 @@ Everything goes into the output folder (output_dir in autofuzz.yaml,
 default autofuzz-out/):
 
   gen/                  generated deterministic_edge_*.c and random_fuzz_*.c
+  stubs/stubs.c         stubs for what the sources use but do not define
   build/edge, build/fuzz  object files of your sources
   bin/                  the test programs
   logs/edge.log         output of all edge tests
@@ -26,7 +27,7 @@ from typing import Dict, List, Optional, Tuple
 
 from .config import Config, PACKAGE_DIR
 
-SUBDIRS = ("gen", "build", "bin", "logs", "crashes", "corpus")
+SUBDIRS = ("gen", "stubs", "build", "bin", "logs", "crashes", "corpus")
 
 WARN_FLAGS = ["-Wall", "-Wextra", "-g", "-O0", "-fno-omit-frame-pointer"]
 SAN_EDGE = ["-fsanitize=address,undefined", "-fno-sanitize-recover=address"]
@@ -137,6 +138,7 @@ class Layout:
     def __init__(self, out: Path):
         self.out = out
         self.gen = out / "gen"
+        self.stubs = out / "stubs"
         self.obj_edge = out / "build" / "edge"
         self.obj_fuzz = out / "build" / "fuzz"
         self.bin = out / "bin"
@@ -147,7 +149,11 @@ class Layout:
 
 def generate(cfg: Config, out: Path) -> List[str]:
     from .main import generate as gen  # imports libclang; only after check_tools
-    return gen(cfg, Layout(out).gen)
+    from . import stubgen
+    L = Layout(out)
+    names = gen(cfg, L.gen)
+    stubgen.generate(cfg, L.stubs)
+    return names
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +194,14 @@ def build(cfg: Config, out: Path, targets: List[str]) -> Dict[str, List[str]]:
             ok, log = _cc([cfg.compiler] + common + san + ["-c", str(src), "-o", str(obj)])
             if not ok:
                 raise BuildError(f"could not compile {src}:\n{log}")
+            objs[kind].append(str(obj))
+        stubs = L.stubs / "stubs.c"
+        if stubs.is_file():
+            obj = odir / "zz_autofuzz_stubs.o"
+            say(f"  CC ({kind})  stubs.c")
+            ok, log = _cc([cfg.compiler] + common + san + ["-c", str(stubs), "-o", str(obj)])
+            if not ok:
+                raise BuildError(f"could not compile the generated stubs {stubs}:\n{log}")
             objs[kind].append(str(obj))
 
     L.bin.mkdir(parents=True, exist_ok=True)

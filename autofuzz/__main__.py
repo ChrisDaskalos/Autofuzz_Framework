@@ -75,7 +75,7 @@ def cmd_generate(args) -> int:
         return 2
     out = _out(args, cfg)
     names = runner.generate(cfg, out)
-    print(f"autofuzz: {2 * len(names)} files in {out / 'gen'}")
+    print(f"autofuzz: {2 * len(names)} files in {out / 'gen'}, stubs in {out / 'stubs'}")
     return 0 if names else 1
 
 
