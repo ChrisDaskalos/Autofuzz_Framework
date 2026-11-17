@@ -91,6 +91,8 @@ class Occurrence:
         self.message = ""             # sanitizer message
         self.function = ""
         self.path = ""                # full path of the source file
+        self.frame_line = 0           # line of the first stack frame in a source file
+        self.top_function = ""        # function named in the SUMMARY (may be libc, e.g. strtok)
         self.test = ""                # CMocka test (edge)
         self.crash = ""               # crash file relative to output_dir (fuzz)
         self.review = ""              # needs-review reason, or ""
@@ -166,7 +168,7 @@ def _occurrences(lines: Sequence[str], stage: str) -> List[Occurrence]:
                 pending.message += f": {m.group(1)} of {m.group(2)} byte(s)"
             m = _FRAME.match(line)
             if m and not pending.function:
-                pending.function, pending.path = m.group(1), m.group(2)
+                pending.function, pending.path, pending.frame_line = m.group(1), m.group(2), int(m.group(3))
             if " is located " in line and "in stack of thread" not in line:
                 # "0x... is located 0 bytes to the right of global variable 'g' defined in '...c:12:16' (0x...) of size 8"
                 where = line.split(" is located ", 1)[1].split(" (0x")[0]
@@ -194,6 +196,9 @@ def _occurrences(lines: Sequence[str], stage: str) -> List[Occurrence]:
                 continue        # only repeats the report before it
             o = pending or Occurrence(stage, prog)
             o.text, o.test = text, test
+            inside = re.search(r" in (\w+)\s*$", line)
+            if inside and o.function and inside.group(1) != o.function:
+                o.top_function = inside.group(1)    # e.g. strtok, called from o.function
             if not o.message:
                 o.message = SUMMARY.match(line).group(2)
             out.append(o)
@@ -209,8 +214,8 @@ def _kind_file_line(o: Occurrence) -> Tuple[str, str, int]:
     loc = LOCATION.search(o.text)
     if loc:
         return kind, loc.group(1), int(loc.group(2))
-    if o.path:
-        return kind, Path(o.path).name, 0
+    if o.path:   # no location in the SUMMARY (crash inside libc): first frame in a source file
+        return kind, Path(o.path).name, o.frame_line
     return kind, "", 0
 
 
@@ -341,6 +346,7 @@ def _as_dict(f: Finding, out_dir: Path) -> dict:
         "id": f.id, "status": f.status, "kind": f.kind, "known": f.known,
         "file": f.file, "line": f.line, "function": o.function,
         "sentence": _sentence(f) if f.status != "SKIPPED" else o.message,
+        "inside": o.top_function,
         "message": o.message, "code": _code_line(o, f.line) if f.line else "",
         "found_by": [f"{x.stage} {x.program}" for x in f.occ],
         "test": o.test, "arguments": [], "input_file": "", "input_program": "", "input_repeats": False,
@@ -399,7 +405,8 @@ def _md(items: List[dict], out_dir: Path, config: str, missing: Sequence[Expecte
                     f"- **Why:** {i['message']}", ""]
             continue
         out += [i["sentence"], "",
-                f"- **Where:** `{where}`" + (f" in `{i['function']}`" if i["function"] else ""),
+                f"- **Where:** `{where}`" + (f" in `{i['function']}`" if i["function"] else "")
+                + (f" (inside `{i['inside']}`, called from there)" if i.get("inside") else ""),
                 f"- **Message:** {i['message']}"]
         if i["code"]:
             out.append(f"- **Code:** `{i['code']}`")
