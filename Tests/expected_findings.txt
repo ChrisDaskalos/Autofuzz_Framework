@@ -1,30 +1,20 @@
-# Findings that `make test` expects today (see docs/FINDINGS.md).
+# Findings that the HAND-WRITTEN tests are expected to show (see docs/FINDINGS.md).
+# The findings of the AutoFuzz suites are in the `baseline:` of each
+# autofuzz.yaml (Tests/legacy_thesis, Tests/autofuzz_selftest, the repository
+# root, examples/ringbuf_cli).
 #
 # Format:  <stage>  <program>  <finding>
-#   stage    unit | edge | fuzz | real-edge | real-fuzz | self-edge | self-fuzz
-#            | skipped | manual
-#            (ex-edge / ex-fuzz: examples/ringbuf_cli, listed in
-#             examples/ringbuf_cli/expected_findings.txt)
-#            (edge/fuzz = Tests/legacy_thesis, real-* = the real Core/Src with
-#             the root autofuzz.yaml, self-* = Tests/autofuzz_selftest)
-#   program  test binary or fuzzer name (exact); for "skipped": the suite
-#            (legacy | real | self | example)
-#   finding  a Python regular expression that must match the whole finding.
-#            Findings look like:
+#   stage    unit   = Tests/legacy_thesis/test_*.c (CMocka, on the PC copy)
+#            manual = Tests/fuzz_manual (hand-written fuzzers, real Core/Src)
+#   program  test binary or fuzzer name (exact)
+#   finding  a Python regular expression that must match the whole finding:
 #              FAILED <cmocka test name>
 #              UBSAN <kind> <file>:<line>
 #              ASAN <kind> <file:line or nothing> in <function>
-#              LIBFUZZER <reason>
-#              SKIPPED <function> (<file>:<line>): <reason>
-#              ASSERT <file>:<line> in <function>
-#              REVIEW (<reason>) <one of the above>   <- caused by the test, not a firmware bug
-#                (reason: NULL argument | zero-filled argument | top frame in ...)
 #
-# A line that starts with "maybe" is allowed but not required: a known bug
-# that a short random fuzzing run finds in some runs and not in others.
-#
-# `make test` exits 0 only if every finding is in this list AND every line
-# without "maybe" was found. When you fix a bug, delete its line here.
+# A line that starts with "maybe" is allowed but not required.
+# `make test` exits 0 only if every finding is listed (here or in a
+# baseline) AND every line without "maybe" was found.
 
 # --- Hand-written unit tests: behaviour differs from what the test expects
 unit    test_protocol_state_machine.elf   FAILED test_state_machine_cancellation_with_whitespace
@@ -34,49 +24,10 @@ unit    test_protocol_servo_command.elf   FAILED test_servo_command_negative_ste
 
 # --- Bug 2: signed overflow in ComputeChecksumFromNumbers (PC copy)
 unit    test_manual_overflow.elf                      UBSAN signed-integer-overflow test_common\.c:162
-edge    deterministic_edge_ComputeChecksumFromNumbers UBSAN signed-integer-overflow test_common\.c:162
-fuzz    random_fuzz_ComputeChecksumFromNumbers        UBSAN signed-integer-overflow test_common\.c:162
-
-# --- Bug 1: stack buffer overflow, command of 1024+ characters
-edge    deterministic_edge_Protocol_ProcessCommand    ASAN stack-buffer-overflow .*
-# The fuzzer stops at the first crash. In 5 runs of 10 s it always found one
-# of these two, but not always the same one: so both are "maybe".
-maybe fuzz random_fuzz_Protocol_ProcessCommand      ASAN stack-buffer-overflow .*
-
-# --- Bug 2 again in the legacy copy: its Protocol_ProcessCommand adds
-#     angle + step itself (test_common.c:94). Found since the fuzzers have
-#     coverage (-fsanitize=fuzzer-no-link). Not in the real firmware.
-maybe fuzz random_fuzz_Protocol_ProcessCommand      UBSAN \S+ test_common\.c:94
 
 # --- Bug 2 in the real firmware (Core/Src/protocol.c)
 manual  fuzz_protocol_session   UBSAN undefined-behavior protocol\.c:159
 manual  fuzz_protocol_cmd       UBSAN undefined-behavior protocol\.c:159
 
-# --- AutoFuzz on the REAL firmware (root autofuzz.yaml: Core/Src/protocol.c,
-#     servo.c, compiled without UNIT_TEST, fake HAL + generated stubs)
-# Bug 2: directly, and through the real input path (seed "(2147483647,1,0)")
-real-edge  deterministic_edge_ComputeChecksumFromNumbers  UBSAN signed-integer-overflow protocol\.c:159
-real-fuzz  random_fuzz_ComputeChecksumFromNumbers         UBSAN signed-integer-overflow protocol\.c:159
-real-edge  deterministic_edge_Protocol_ProcessCommand     UBSAN signed-integer-overflow protocol\.c:159
-real-fuzz  random_fuzz_Protocol_ProcessCommand            UBSAN signed-integer-overflow protocol\.c:159
-# Step 0 or step > SERVO_MAX_STEP reaches the assert in Servo_Ramp
-real-edge  deterministic_edge_Servo_Ramp                  ASSERT servo\.c:40 in Servo_Ramp
-real-fuzz  random_fuzz_Servo_Ramp                         ASSERT servo\.c:40 in Servo_Ramp
-# Bug 1 (stack buffer overflow) must NOT be found here: it is only in the copy.
-
 # fuzz_uart_dma: no findings expected (the old DMA findings were caused by
 # impossible DMA counter values in the harness; fixed).
-
-# --- AutoFuzz self-test (Tests/autofuzz_selftest): code that cannot run on a PC
-skipped  self  SKIPPED cpu_nop \(src/selftest\.c:\d+\): inline assembly .*
-skipped  self  SKIPPED led_on \(src/selftest\.c:\d+\): casts an integer constant to a pointer .*
-skipped  self  SKIPPED run_forever \(src/selftest\.c:\d+\): never returns .*
-
-# --- AutoFuzz self-test: crashes caused by the test, marked "needs review"
-# NULL stays for a type the test cannot create (struct sensor is opaque in selftest.h)
-self-edge  deterministic_edge_sensor_value  REVIEW \(NULL argument\) UBSAN null-pointer-use selftest\.c:\d+
-self-fuzz  random_fuzz_sensor_value         REVIEW \(NULL argument\) UBSAN null-pointer-use selftest\.c:\d+
-# sum3 reads 3 ints; the test passed ONE zero-filled int (first_item reads 1: no finding)
-self-edge  deterministic_edge_sum3          REVIEW \(zero-filled argument\) ASAN stack-buffer-overflow selftest\.c:\d+ in sum3
-self-fuzz  random_fuzz_sum3                 REVIEW \(zero-filled argument\) ASAN stack-buffer-overflow selftest\.c:\d+ in sum3
-self-fuzz  random_fuzz_ratio              REVIEW \(top frame in fake header\) UBSAN integer-divide-by-zero board\.h:\d+

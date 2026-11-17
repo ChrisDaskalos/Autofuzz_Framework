@@ -44,3 +44,12 @@ fuzz:
   seconds: 10
 
 output_dir: autofuzz-out
+
+# The bug added on purpose (README.md). `autofuzz run` exits 1 only for a
+# bug that is not listed here.
+baseline:
+  # The off-by-one in ringbuf_push: fill the buffer, pop one, push one.
+  - 'edge deterministic_edge_cli_run ASAN global-buffer-overflow ringbuf\.c:34 in ringbuf_push'
+  # The fuzzers find it by themselves in about 1 s (5 of 5 runs of 10 s).
+  - 'fuzz random_fuzz_cli_run ASAN global-buffer-overflow ringbuf\.c:34 in ringbuf_push'
+  - 'fuzz random_fuzz_cli_execute ASAN global-buffer-overflow ringbuf\.c:34 in ringbuf_push'

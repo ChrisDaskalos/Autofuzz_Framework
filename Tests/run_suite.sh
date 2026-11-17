@@ -13,8 +13,8 @@ results=Tests/results
 out="$(dirname "$cfg")/autofuzz-out"
 env $AUTOFUZZ run --config "$cfg" --fresh "$@" > "$results/${prefix}autofuzz.log" 2>&1
 rc=$?
-label="${prefix%-}"; [ -n "$label" ] || label=legacy
-grep -E '^=== (EDGE|FUZZ)|^ +SUMMARY|SKIPPED|WARNING|NEEDS REVIEW' "$results/${prefix}autofuzz.log" | sed "s|^|[$label] |"
+label="${prefix%-}"
+grep -E '^=== (EDGE|FUZZ)|^ +SUMMARY|SKIPPED|WARNING|NEEDS REVIEW|^>>> Report|^    F[0-9]+ ' "$results/${prefix}autofuzz.log" | sed "s|^|[$label] |"
 if [ $rc -ge 2 ]; then
     cat "$results/${prefix}autofuzz.log"
     exit $rc

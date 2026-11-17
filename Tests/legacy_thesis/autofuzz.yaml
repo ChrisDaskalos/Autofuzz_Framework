@@ -92,3 +92,18 @@ fuzz:
   seconds: 10
 
 output_dir: autofuzz-out
+
+# Known findings (docs/FINDINGS.md). `autofuzz run` exits 1 only for a
+# firmware bug that is not listed here; `make test` also checks that every
+# line without "maybe" is found.
+baseline:
+  # Bug 2: signed overflow in ComputeChecksumFromNumbers
+  - 'edge deterministic_edge_ComputeChecksumFromNumbers UBSAN signed-integer-overflow test_common\.c:162'
+  - 'fuzz random_fuzz_ComputeChecksumFromNumbers UBSAN signed-integer-overflow test_common\.c:162'
+  # Bug 1: stack buffer overflow, command of 1024+ characters
+  - 'edge deterministic_edge_Protocol_ProcessCommand ASAN stack-buffer-overflow .*'
+  # The fuzzer stops at the first crash. In 5 runs of 10 s it always found one
+  # of these two, but not always the same one: so both are "maybe".
+  - 'maybe fuzz random_fuzz_Protocol_ProcessCommand ASAN stack-buffer-overflow .*'
+  # Bug 2 again: this copy's Protocol_ProcessCommand adds angle + step itself
+  - 'maybe fuzz random_fuzz_Protocol_ProcessCommand UBSAN \S+ test_common\.c:94'

@@ -89,3 +89,17 @@ fuzz:
   seconds: 10
 
 output_dir: autofuzz-out
+
+# Known findings in the real firmware (docs/FINDINGS.md). `autofuzz run` exits
+# 1 only for a firmware bug that is not listed here; `make test` also checks
+# that every line without "maybe" is found.
+# Bug 1 (stack buffer overflow) must NOT be found here: it is only in the copy.
+baseline:
+  # Bug 2: directly, and through the real input path (seed "(2147483647,1,0)")
+  - 'edge deterministic_edge_ComputeChecksumFromNumbers UBSAN signed-integer-overflow protocol\.c:159'
+  - 'fuzz random_fuzz_ComputeChecksumFromNumbers UBSAN signed-integer-overflow protocol\.c:159'
+  - 'edge deterministic_edge_Protocol_ProcessCommand UBSAN signed-integer-overflow protocol\.c:159'
+  - 'fuzz random_fuzz_Protocol_ProcessCommand UBSAN signed-integer-overflow protocol\.c:159'
+  # Step 0 or step > SERVO_MAX_STEP reaches the assert in Servo_Ramp
+  - 'edge deterministic_edge_Servo_Ramp ASSERT servo\.c:40 in Servo_Ramp'
+  - 'fuzz random_fuzz_Servo_Ramp ASSERT servo\.c:40 in Servo_Ramp'

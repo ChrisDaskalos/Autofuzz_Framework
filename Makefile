@@ -62,7 +62,7 @@ test: build
 > @mkdir -p $(RESULTS)
 > @$(MAKE) --no-print-directory -C $(UNIT) unit > $(RESULTS)/unit.log 2>&1; \
 >  grep -E '^=== TEST|^\[  (PASSED|FAILED)  \] [0-9a-z]|^SUMMARY' $(RESULTS)/unit.log; true
-> @Tests/run_suite.sh $(LEGACY_CFG) "" --fuzz-seconds $(TEST_FUZZ_SECS)
+> @Tests/run_suite.sh $(LEGACY_CFG) legacy- --fuzz-seconds $(TEST_FUZZ_SECS)
 > @Tests/run_suite.sh $(SELF_CFG) self-
 > @Tests/run_suite.sh $(REAL_CFG) real- --fuzz-seconds $(TEST_FUZZ_SECS)
 > @Tests/run_suite.sh $(EXAMPLE_CFG) ex- --fuzz-seconds $(TEST_FUZZ_SECS)

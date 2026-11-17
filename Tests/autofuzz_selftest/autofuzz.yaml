@@ -21,3 +21,18 @@ fuzz:
   seconds: 2
 
 output_dir: autofuzz-out
+
+# What the self-test must show (all caused on purpose).
+baseline:
+  # Code that cannot run on a PC
+  - 'skipped cpu_nop SKIPPED cpu_nop \(src/selftest\.c:\d+\): inline assembly .*'
+  - 'skipped led_on SKIPPED led_on \(src/selftest\.c:\d+\): casts an integer constant to a pointer .*'
+  - 'skipped run_forever SKIPPED run_forever \(src/selftest\.c:\d+\): never returns .*'
+  # NULL stays for a type the test cannot create (struct sensor is opaque in selftest.h)
+  - 'edge deterministic_edge_sensor_value REVIEW \(NULL argument\) UBSAN null-pointer-use selftest\.c:\d+'
+  - 'fuzz random_fuzz_sensor_value REVIEW \(NULL argument\) UBSAN null-pointer-use selftest\.c:\d+'
+  # sum3 reads 3 ints; the test passed ONE zero-filled int (first_item reads 1: no finding)
+  - 'edge deterministic_edge_sum3 REVIEW \(zero-filled argument\) ASAN stack-buffer-overflow selftest\.c:\d+ in sum3'
+  - 'fuzz random_fuzz_sum3 REVIEW \(zero-filled argument\) ASAN stack-buffer-overflow selftest\.c:\d+ in sum3'
+  # The crash is inside the fake header
+  - 'fuzz random_fuzz_ratio REVIEW \(top frame in fake header\) UBSAN integer-divide-by-zero board\.h:\d+'
