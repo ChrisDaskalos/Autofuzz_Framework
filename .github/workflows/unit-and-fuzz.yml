@@ -1,8 +1,10 @@
 name: unit-and-fuzz
 
-# Two ways to run the same tests:
-#   native - on the Ubuntu 24.04 runner: make deps, make build, make test
-#   docker - docker build + docker run (the image runs `make test`)
+# Three ways to run the same tests:
+#   native   - on the Ubuntu 24.04 runner: make deps, make build, make test
+#   docker   - docker build + docker run (the image runs `make test`)
+#   ubuntu20 - the same in Dockerfile.ubuntu20 (Ubuntu 20.04, Python 3.8,
+#              clang 10): the oldest supported system, like the developer VM
 # `make test` exits 0 only if the findings match Tests/expected_findings.txt.
 #
 # "Run workflow" (manual start) also runs a longer `make fuzz`.
@@ -74,6 +76,19 @@ jobs:
 
       - name: docker run (make test)
         run: docker run --rm autofuzz
+
+  ubuntu20:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: docker build (Ubuntu 20.04, Python 3.8, clang 10)
+        run: docker build -f Dockerfile.ubuntu20 -t autofuzz:ubuntu20 .
+
+      - name: make deps, make build, make test
+        run: docker run --rm autofuzz:ubuntu20 sh -c 'make deps && make build && make test'
 
   long-fuzz:
     # Only when started by hand ("Run workflow" button).
