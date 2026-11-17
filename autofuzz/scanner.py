@@ -339,3 +339,118 @@ def extract_targets(
             continue
         targets.append(cur)
     return targets
+
+# ─────────────────────────────────────────────────────────────────────
+# Skip detection: code that cannot run on a PC
+# ─────────────────────────────────────────────────────────────────────
+_ASM_KINDS = {getattr(cindex.CursorKind, k) for k in ("ASM_STMT", "MS_ASM_STMT") if hasattr(cindex.CursorKind, k)}
+_LOOP_KINDS = {cindex.CursorKind.WHILE_STMT, cindex.CursorKind.DO_STMT, cindex.CursorKind.FOR_STMT}
+_BREAK_SCOPES = _LOOP_KINDS | {cindex.CursorKind.SWITCH_STMT}
+_CONST_EXPR_KINDS = {
+    cindex.CursorKind.INTEGER_LITERAL, cindex.CursorKind.PAREN_EXPR, cindex.CursorKind.UNEXPOSED_EXPR,
+    cindex.CursorKind.CSTYLE_CAST_EXPR, cindex.CursorKind.BINARY_OPERATOR, cindex.CursorKind.UNARY_OPERATOR,
+}
+
+
+_eval_ready = False
+
+
+def _eval_int(cur: cindex.Cursor) -> Optional[int]:
+    """The value of a constant integer expression (macros expanded), or None.
+    Uses clang_Cursor_Evaluate from libclang (clang >= 3.9)."""
+    global _eval_ready
+    import ctypes
+    lib = cindex.conf.lib
+    try:
+        if not _eval_ready:
+            lib.clang_Cursor_Evaluate.argtypes = [cindex.Cursor]
+            lib.clang_Cursor_Evaluate.restype = ctypes.c_void_p
+            lib.clang_EvalResult_getKind.argtypes = [ctypes.c_void_p]
+            lib.clang_EvalResult_getKind.restype = ctypes.c_int
+            lib.clang_EvalResult_getAsLongLong.argtypes = [ctypes.c_void_p]
+            lib.clang_EvalResult_getAsLongLong.restype = ctypes.c_longlong
+            lib.clang_EvalResult_dispose.argtypes = [ctypes.c_void_p]
+            lib.clang_EvalResult_dispose.restype = None
+            _eval_ready = True
+        res = lib.clang_Cursor_Evaluate(cur)
+    except (AttributeError, ctypes.ArgumentError):
+        return None
+    if not res:
+        return None
+    try:
+        return lib.clang_EvalResult_getAsLongLong(res) if lib.clang_EvalResult_getKind(res) == 1 else None
+    finally:
+        lib.clang_EvalResult_dispose(res)
+
+
+def _int_const_to_pointer(cast: cindex.Cursor) -> bool:
+    """(T *)0x40010810 or (T *)(PERIPH_BASE + 0x400): a register address.
+    (T *)0 (NULL) does not count."""
+    if cast.type.get_canonical().kind != cindex.TypeKind.POINTER:
+        return False
+    operand = [c for c in cast.get_children() if c.kind != cindex.CursorKind.TYPE_REF]
+    if len(operand) != 1:
+        return False
+    for node in operand[0].walk_preorder():
+        if node.kind not in _CONST_EXPR_KINDS and node.kind != cindex.CursorKind.TYPE_REF:
+            return False   # uses a variable, a call, ...: not a constant address
+    if operand[0].type.get_canonical().kind == cindex.TypeKind.POINTER:
+        return False       # (T *)(void *)x: a pointer-to-pointer cast
+    value = _eval_int(operand[0])
+    return value is not None and value != 0
+
+
+def _always_true_loop(loop: cindex.Cursor) -> bool:
+    toks = [t.spelling for t in loop.get_tokens()]
+    if loop.kind == cindex.CursorKind.FOR_STMT:
+        # for ( init ; ; step ): nothing between the two ';' at depth 1
+        depth, semis = 0, []
+        for i, t in enumerate(toks):
+            if t == "(":
+                depth += 1
+            elif t == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            elif t == ";" and depth == 1:
+                semis.append(i)
+        return len(semis) == 2 and semis[1] == semis[0] + 1
+    if loop.kind == cindex.CursorKind.WHILE_STMT and len(toks) >= 4 and toks[1] == "(" and toks[3] == ")":
+        cond = toks[2]
+    elif loop.kind == cindex.CursorKind.DO_STMT and len(toks) >= 4 and toks[-1] in (")", ";"):
+        tail = toks[-4:] if toks[-1] == ")" else toks[-5:-1]
+        if tail[0] != "(" or tail[2] != ")":
+            return False
+        cond = tail[1]
+    else:
+        return False
+    if cond == "true":
+        return True
+    try:
+        return int(cond.rstrip("uUlL"), 0) != 0
+    except ValueError:
+        return False
+
+
+def _can_leave(node: cindex.Cursor, loop_level: bool = True) -> bool:
+    """True if a return, goto or a break of THIS loop is inside `node`."""
+    for child in node.get_children():
+        if child.kind in (cindex.CursorKind.RETURN_STMT, cindex.CursorKind.GOTO_STMT):
+            return True
+        if child.kind == cindex.CursorKind.BREAK_STMT and loop_level:
+            return True
+        if _can_leave(child, loop_level and child.kind not in _BREAK_SCOPES):
+            return True
+    return False
+
+
+def skip_reason(fn: cindex.Cursor) -> Optional[str]:
+    """Why this function cannot be tested on a PC, or None if it can."""
+    for node in fn.walk_preorder():
+        if node.kind in _ASM_KINDS:
+            return "inline assembly (runs only on the target CPU)"
+        if node.kind == cindex.CursorKind.CSTYLE_CAST_EXPR and _int_const_to_pointer(node):
+            return "casts an integer constant to a pointer (hardware register access)"
+        if node.kind in _LOOP_KINDS and _always_true_loop(node) and not _can_leave(node):
+            return "never returns (endless loop with no break or return)"
+    return None

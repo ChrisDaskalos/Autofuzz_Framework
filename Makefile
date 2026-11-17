@@ -24,6 +24,10 @@ PYTHON ?= python3
 # The tool is run from the repository root, so `pip install .` is not needed.
 AUTOFUZZ := PYTHONPATH=$(CURDIR) $(PYTHON) -m autofuzz
 LEGACY_CFG := $(UNIT)/autofuzz.yaml
+SELF_CFG   := Tests/autofuzz_selftest/autofuzz.yaml
+# Every config that `make test` runs and checks for determinism
+CONFIGS    := $(LEGACY_CFG) $(SELF_CFG)
+export AUTOFUZZ
 
 .PHONY: help deps build test fuzz clean check-determinism
 
@@ -53,10 +57,8 @@ test: build
 > @mkdir -p $(RESULTS)
 > @$(MAKE) --no-print-directory -C $(UNIT) unit > $(RESULTS)/unit.log 2>&1; \
 >  grep -E '^=== TEST|^\[  (PASSED|FAILED)  \] [0-9a-z]|^SUMMARY' $(RESULTS)/unit.log; true
-> @$(AUTOFUZZ) run --config $(LEGACY_CFG) --fresh --fuzz-seconds $(TEST_FUZZ_SECS) > $(RESULTS)/autofuzz.log 2>&1; \
->  rc=$$?; grep -E '^=== (EDGE|FUZZ)|^ +SUMMARY|SKIPPED' $(RESULTS)/autofuzz.log; \
->  if [ $$rc -ge 2 ]; then cat $(RESULTS)/autofuzz.log; exit $$rc; fi; \
->  cp $(UNIT)/autofuzz-out/logs/edge.log $(UNIT)/autofuzz-out/logs/fuzz.log $(RESULTS)/
+> @Tests/run_suite.sh $(LEGACY_CFG) "" --fuzz-seconds $(TEST_FUZZ_SECS)
+> @Tests/run_suite.sh $(SELF_CFG) self-
 > @$(MAKE) --no-print-directory -C $(MANUAL) fuzz FUZZ_MAX_SECS=$(TEST_FUZZ_SECS) > $(RESULTS)/manual.log 2>&1; \
 >  grep -E '^=== MANUAL|^Done|^SUMMARY' $(RESULTS)/manual.log; true
 > @$(MAKE) --no-print-directory check-determinism
@@ -66,10 +68,13 @@ test: build
 # (so the order of a Python set cannot leak into the files) and compare.
 check-determinism:
 > @rm -rf $(RESULTS)/determinism
-> @PYTHONHASHSEED=1 $(AUTOFUZZ) generate --config $(LEGACY_CFG) --output-dir $(RESULTS)/determinism/a >/dev/null
-> @PYTHONHASHSEED=2 $(AUTOFUZZ) generate --config $(LEGACY_CFG) --output-dir $(RESULTS)/determinism/b >/dev/null
-> @diff -r $(RESULTS)/determinism/a $(RESULTS)/determinism/b \
->   && echo ">>> Determinism: generating twice gives identical files ($$(find $(RESULTS)/determinism/a -type f | wc -l) files)"
+> @set -e; for cfg in $(CONFIGS); do \
+>   d=$(RESULTS)/determinism/$$(dirname $$cfg | tr / _); \
+>   PYTHONHASHSEED=1 $(AUTOFUZZ) generate --config $$cfg --output-dir $$d/a >/dev/null; \
+>   PYTHONHASHSEED=2 $(AUTOFUZZ) generate --config $$cfg --output-dir $$d/b >/dev/null; \
+>   diff -r $$d/a $$d/b; \
+>   echo ">>> Determinism: $$cfg: generating twice gives identical files ($$(find $$d/a -type f | wc -l) files)"; \
+> done
 > @rm -rf $(RESULTS)/determinism
 
 # Both fuzz suites always run; the exit code is 1 if either found something.
@@ -84,4 +89,5 @@ fuzz: build
 clean:
 > $(MAKE) -C $(UNIT) clean
 > $(MAKE) -C $(MANUAL) clean
+> @$(AUTOFUZZ) clean --config $(SELF_CFG) >/dev/null
 > rm -rf $(RESULTS)

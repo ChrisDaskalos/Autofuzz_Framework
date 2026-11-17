@@ -1,14 +1,17 @@
 # Findings that `make test` expects today (see docs/FINDINGS.md).
 #
 # Format:  <stage>  <program>  <finding>
-#   stage    unit | edge | fuzz | manual
-#   program  test binary or fuzzer name (exact)
+#   stage    unit | edge | fuzz | self-edge | self-fuzz | skipped | manual
+#            (edge/fuzz = Tests/legacy_thesis, self-* = Tests/autofuzz_selftest)
+#   program  test binary or fuzzer name (exact); for "skipped": the suite
+#            (legacy | self)
 #   finding  a Python regular expression that must match the whole finding.
 #            Findings look like:
 #              FAILED <cmocka test name>
 #              UBSAN <kind> <file>:<line>
 #              ASAN <kind> <file:line or nothing> in <function>
 #              LIBFUZZER <reason>
+#              SKIPPED <function> (<file>:<line>): <reason>
 #
 # A line that starts with "maybe" is allowed but not required: a known bug
 # that a short random fuzzing run finds in some runs and not in others.
@@ -37,3 +40,8 @@ manual  fuzz_protocol_cmd       UBSAN undefined-behavior protocol\.c:159
 
 # fuzz_uart_dma: no findings expected (the old DMA findings were caused by
 # impossible DMA counter values in the harness; fixed).
+
+# --- AutoFuzz self-test (Tests/autofuzz_selftest): code that cannot run on a PC
+skipped  self  SKIPPED cpu_nop \(src/selftest\.c:\d+\): inline assembly .*
+skipped  self  SKIPPED led_on \(src/selftest\.c:\d+\): casts an integer constant to a pointer .*
+skipped  self  SKIPPED run_forever \(src/selftest\.c:\d+\): never returns .*

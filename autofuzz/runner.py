@@ -184,7 +184,8 @@ def build(cfg: Config, out: Path, targets: List[str]) -> Dict[str, List[str]]:
     """
     L = Layout(out)
     common = WARN_FLAGS + cfg.clang_args() + [f"-I{PACKAGE_DIR / 'rt'}"]
-    result: Dict[str, List[str]] = {"edge": [], "fuzz": [], "skipped": []}
+    from .main import read_skipped
+    result: Dict[str, List[str]] = {"edge": [], "fuzz": [], "skipped": read_skipped(L.gen)}
     objs: Dict[str, List[str]] = {"edge": [], "fuzz": []}
     for kind, odir, san in (("edge", L.obj_edge, SAN_EDGE), ("fuzz", L.obj_fuzz, SAN_FUZZ)):
         odir.mkdir(parents=True, exist_ok=True)

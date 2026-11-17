@@ -1,0 +1,23 @@
+# AutoFuzz self-test: checks skip detection, stubs and "needs review".
+# Not a real project. `make test` runs it and compares the result with
+# Tests/expected_findings.txt (stages self-edge, self-fuzz, skipped).
+#
+#   python3 -m autofuzz run --config Tests/autofuzz_selftest/autofuzz.yaml
+
+sources:
+  - src/selftest.c
+
+fake_include_dirs:
+  - fakes
+
+include_dirs:
+  - include
+
+harness:
+  includes:
+    - selftest.h
+
+fuzz:
+  seconds: 2
+
+output_dir: autofuzz-out

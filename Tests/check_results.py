@@ -4,8 +4,9 @@ Compare the findings of `make test` with Tests/expected_findings.txt.
 
 Reads:
   Tests/results/unit.log                       (hand-written tests, Tests/legacy_thesis)
-  Tests/results/edge.log, fuzz.log             (autofuzz run, copied from
-                                                Tests/legacy_thesis/autofuzz-out/logs/)
+  Tests/results/<prefix>edge.log, fuzz.log     (`autofuzz run` of each suite in SUITES,
+                                                copied by Tests/run_suite.sh)
+  Tests/results/<prefix>skipped.txt            (functions AutoFuzz skipped, per suite)
   Tests/fuzz_manual/out/<fuzzer>.log           (output of Tests/fuzz_manual)
 
 Prints one line per stage, then as the very last line either
@@ -20,10 +21,19 @@ from pathlib import Path
 TESTS = Path(__file__).resolve().parent
 RESULTS = TESTS / "results"
 UNIT_DIR = TESTS / "legacy_thesis"
-GEN_DIR = UNIT_DIR / "autofuzz-out" / "gen"   # output_dir in its autofuzz.yaml
 MANUAL_DIR = TESTS / "fuzz_manual"
 MANUAL_FUZZERS = ["fuzz_protocol_session", "fuzz_protocol_cmd", "fuzz_uart_dma"]
-STAGES = ["unit", "edge", "fuzz", "manual"]
+
+# AutoFuzz suites: name -> (log prefix in Tests/results/, folder of its autofuzz.yaml).
+# Stages: <prefix>edge and <prefix>fuzz; the "skipped" stage uses the suite name as program.
+SUITES = {
+    "legacy": ("", UNIT_DIR),
+    "self": ("self-", TESTS / "autofuzz_selftest"),
+}
+STAGES = ["unit"]
+for _prefix, _ in SUITES.values():
+    STAGES += [f"{_prefix}edge", f"{_prefix}fuzz"]
+STAGES += ["skipped", "manual"]
 
 HEADER = re.compile(r"^=== (?:TEST|EDGE|FUZZ): (?:\./)?(\S+) ===")
 FAILED = re.compile(r"^\[  FAILED  \] (\w+)\s*$")
@@ -84,10 +94,23 @@ def read(path: Path):
 
 
 def programs_that_must_run():
-    unit = sorted(p.stem + ".elf" for p in UNIT_DIR.glob("test_*.c") if p.name != "test_common.c")
-    edge = sorted(p.stem for p in GEN_DIR.glob("deterministic_edge_*.c"))
-    fuzz = sorted(p.stem for p in GEN_DIR.glob("random_fuzz_*.c"))
-    return {"unit": unit, "edge": edge, "fuzz": fuzz, "manual": MANUAL_FUZZERS}
+    need = {"unit": sorted(p.stem + ".elf" for p in UNIT_DIR.glob("test_*.c") if p.name != "test_common.c"),
+            "manual": MANUAL_FUZZERS}
+    for prefix, folder in SUITES.values():
+        gen = folder / "autofuzz-out" / "gen"   # output_dir in its autofuzz.yaml
+        need[f"{prefix}edge"] = sorted(p.stem for p in gen.glob("deterministic_edge_*.c"))
+        need[f"{prefix}fuzz"] = sorted(p.stem for p in gen.glob("random_fuzz_*.c"))
+    return need
+
+
+def skipped_findings():
+    """{suite: {"findings": {"SKIPPED <name> (<file>:<line>): <reason>"}}}"""
+    out = {}
+    for name, (prefix, _) in SUITES.items():
+        lines = [ln for ln in read(RESULTS / f"{prefix}skipped.txt") if ln.strip()]
+        if lines:
+            out[name] = {"findings": {f"SKIPPED {ln.strip()}" for ln in lines}, "done": True}
+    return out
 
 
 def load_expected():
@@ -108,7 +131,8 @@ def load_expected():
 
 
 def main() -> int:
-    actual = {s: parse(read(RESULTS / f"{s}.log")) for s in ("unit", "edge", "fuzz")}
+    actual = {s: parse(read(RESULTS / f"{s}.log")) for s in STAGES if s not in ("skipped", "manual")}
+    actual["skipped"] = skipped_findings()
     actual["manual"] = {}
     for name in MANUAL_FUZZERS:
         actual["manual"].update(parse(read(MANUAL_DIR / "out" / f"{name}.log"), program=name))
@@ -122,7 +146,7 @@ def main() -> int:
             p = actual[stage].get(name)
             if p is None:
                 problems.append(f"did not run: {stage} {name}")
-            elif stage in ("fuzz", "manual") and not p["done"] and not p["findings"]:
+            elif (stage.endswith("fuzz") or stage == "manual") and not p["done"] and not p["findings"]:
                 problems.append(f"did not finish: {stage} {name}")
 
     # 2. New findings, and expected findings that are missing.
@@ -149,7 +173,7 @@ def main() -> int:
         total, new = counts[s]
         req = sum(1 for e in expected if e[0] == s and e[3])
         may = sum(1 for e in expected if e[0] == s and not e[3])
-        print(f"  {s:<7} {total:2d} findings  (expected: {req} required"
+        print(f"  {s:<9} {total:2d} findings  (expected: {req} required"
               f"{f' + {may} maybe' if may else ''}; new: {new})")
     if problems:
         print("")

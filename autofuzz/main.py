@@ -94,6 +94,24 @@ def _regex_fallback(paths: List[Path]) -> List[Tuple[str, List[str]]]:
             seen[name] = params
     return [(k, seen[k]) for k in sorted(seen.keys())]
 
+SKIPPED_FILE = "skipped.txt"   # in the gen folder: functions that cannot run on a PC
+
+
+def _where(fn: cindex.Cursor, cfg: Config) -> str:
+    """file:line, relative to the config folder (the same on every machine)."""
+    f = Path(fn.location.file.name).resolve()
+    try:
+        name = f.relative_to(cfg.base_dir.resolve()).as_posix()
+    except ValueError:
+        name = os.path.relpath(str(f), str(cfg.base_dir.resolve())).replace(os.sep, "/")
+    return f"{name}:{fn.location.line}"
+
+
+def read_skipped(gen_dir: Path) -> List[str]:
+    p = Path(gen_dir) / SKIPPED_FILE
+    return p.read_text(encoding="utf-8").splitlines() if p.is_file() else []
+
+
 # -------- main flow ----------
 def generate(cfg: Config, out_dir: Path, quiet: bool = False) -> List[str]:
     """
@@ -103,12 +121,14 @@ def generate(cfg: Config, out_dir: Path, quiet: bool = False) -> List[str]:
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    for old in list(out_dir.glob("deterministic_edge_*.c")) + list(out_dir.glob("random_fuzz_*.c")):
+    for old in list(out_dir.glob("deterministic_edge_*.c")) + list(out_dir.glob("random_fuzz_*.c")) \
+            + list(out_dir.glob(SKIPPED_FILE)):
         old.unlink()  # a function that was removed must not keep its old harness
 
     index = cindex.Index.create()
     found = {}   # name -> (param types, edges)
     excluded: List[str] = []
+    skipped: List[str] = []   # "name (file:line): reason"
     for src in cfg.sources:
         try:
             tu = index.parse(str(src), args=cfg.clang_args())
@@ -119,6 +139,10 @@ def generate(cfg: Config, out_dir: Path, quiet: bool = False) -> List[str]:
             for fn in targets:
                 if not cfg.wants_function(fn.spelling):
                     excluded.append(fn.spelling)
+                    continue
+                reason = scanner.skip_reason(fn)
+                if reason:
+                    skipped.append(f"{fn.spelling} ({_where(fn, cfg)}): {reason}")
                     continue
                 ptypes, pnames = _param_types_and_names(fn)
                 found[fn.spelling] = (ptypes, scanner.scan_function(fn, ptypes, pnames, cfg))
@@ -132,6 +156,8 @@ def generate(cfg: Config, out_dir: Path, quiet: bool = False) -> List[str]:
             found[name] = (ptypes, [set() for _ in ptypes])  # empty -> defaults per type
 
     names = sorted(found)
+    if skipped:
+        (out_dir / SKIPPED_FILE).write_text("".join(s + "\n" for s in sorted(skipped)), encoding="utf-8")
     for name in names:
         ptypes, edges = found[name]
         generator.emit_edge_harness(name, ptypes, edges, out_dir, cfg)
@@ -142,6 +168,8 @@ def generate(cfg: Config, out_dir: Path, quiet: bool = False) -> List[str]:
             print(f"autofuzz: targets -> {', '.join(names)}")
         else:
             print("autofuzz: no target functions found in 'sources'.", file=sys.stderr)
+        for s in sorted(skipped):
+            print(f"autofuzz: SKIPPED: {s}")
         if excluded:
             print(f"autofuzz: left out by functions.include/exclude -> {', '.join(sorted(set(excluded)))}")
     return names
