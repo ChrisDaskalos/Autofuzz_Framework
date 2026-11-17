@@ -52,7 +52,7 @@ limits:
   # AutoFuzz then tests min-1, min, min+1, the middle, max-1, max, max+1.
   # Example:
   #   int_ranges:
-  #     Servo_SetAngle.angle: [0, 180]
+  #     Motor_SetSpeed.rpm: [0, 3000]
   int_ranges: {}
 
   # Text inputs for `char *` parameters, added to the default list.

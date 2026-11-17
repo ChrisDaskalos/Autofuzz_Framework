@@ -91,7 +91,7 @@ def _setups(func: str, param_types: Sequence[str], cfg: Config) -> Dict[int, Set
 def _setup_lines(func: str, setups: Dict[int, SetupEntry], indent: str = "    ") -> List[str]:
     """Declare each prepared struct, then run its setup lines.
     The lines are skipped when they call the function under test itself
-    (for example reset_ctx: it is the setup)."""
+    (for example Parser_Init when it is the setup line itself)."""
     out: List[str] = []
     for i in sorted(setups):
         e = setups[i]

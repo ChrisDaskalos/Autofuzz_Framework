@@ -38,6 +38,18 @@ make test      # runs all tests and compares the findings with the expected list
 ```
 
 If `clang` is not found: `sudo ln -s /usr/bin/clang-18 /usr/local/bin/clang`.
+Ubuntu 20.04 / Python 3.8 works too: see [docs/INSTALL.md](docs/INSTALL.md).
+
+## Use it on your own C code
+
+```bash
+pip install .          # gives the `autofuzz` command
+cd my-project
+autofuzz init          # writes autofuzz.yaml; list your .c files in it
+autofuzz run           # checks the tools, generates, compiles, runs
+```
+
+All settings are in `autofuzz.yaml`: [docs/CONFIG.md](docs/CONFIG.md).
 
 ## Expected output
 
@@ -71,6 +83,8 @@ Details: [docs/FINDINGS.md](docs/FINDINGS.md).
 | [docs/FINDINGS.md](docs/FINDINGS.md) | which findings are real firmware bugs, and which are only in the legacy copy |
 | [docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md) | one function, step by step, from the C code to the error message; glossary |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the flow diagram, all `make` commands, the folder map, CI, building the firmware |
+| [docs/INSTALL.md](docs/INSTALL.md) | the exact install commands (Ubuntu 20.04 and 24.04, Docker) |
+| [docs/CONFIG.md](docs/CONFIG.md) | every key of `autofuzz.yaml`, with examples |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | the plan for AutoFuzz 1.0 |
 | [Tests/fuzz_manual/README.md](Tests/fuzz_manual/README.md) | the hand-written fuzzers for the real firmware |
 

@@ -35,15 +35,15 @@ The real firmware has the same code at `Core/Src/protocol.c:159`.
 
 ### 2. Scanner
 
-`make build` runs `python3 -m autofuzz.main` in `Tests/legacy_thesis/`.
+`make build` runs `autofuzz build --config Tests/legacy_thesis/autofuzz.yaml`.
+That file says which C file to read (`sources: [test_common.c]`), where its
+headers are, and which extra test strings to use (see [CONFIG.md](CONFIG.md)).
 
 `autofuzz/scanner.py` asks **libclang** (the C parser of clang) to read
-`test_common.c`. It keeps every function that:
+`test_common.c`. It keeps every function that is defined in that file and
+is not `static`.
 
-- is not `static`, and
-- has at least one parameter.
-
-`ComputeChecksumFromNumbers` passes both rules. It has two parameters, both
+`ComputeChecksumFromNumbers` passes. It has two parameters, both
 of type `int`.
 
 For each parameter, the scanner also looks inside the function for useful
@@ -52,7 +52,8 @@ function has none, so only the default values are used.
 
 ### 3. Edge values
 
-The default values for each type are in `autofuzz/config.py`. For `int` they
+The default values for each type come from a rule in `autofuzz/config.py`
+(based on the size of the type). For `int` they
 are the "dangerous" numbers: the smallest, the largest, and numbers near 0
 and near the 16-bit limits:
 
@@ -62,7 +63,7 @@ and near the 16-bit limits:
 ```
 
 `generator.py` sorts the values and keeps at most 12 per parameter
-(`EDGE_CAP`), spread from the smallest to the largest:
+(`limits.edge_cap` in the YAML), spread from the smallest to the largest:
 
 ```c
 static int a0_vals[] = { -2147483648, -2147483647, -32768, -2, -1, 0, 2,
@@ -116,13 +117,15 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 }
 ```
 
-The generated files are the same every time. They are not stored in git;
-`make build` writes them again.
+The generated files are the same every time (`make check-determinism`
+checks this). They are written to `Tests/legacy_thesis/autofuzz-out/gen/`,
+which is not stored in git; `make build` writes them again.
 
 ### 5. Compile with sanitizers
 
-`Tests/legacy_thesis/Makefile` compiles each file together with
-`test_common.c`, using clang:
+`autofuzz/runner.py` compiles each file together with `test_common.c`,
+using clang (no Makefile needed). Before that, it checks that clang,
+CMocka and libFuzzer are installed:
 
 | Program | Sanitizer flags |
 |---|---|
@@ -134,13 +137,14 @@ The *sanitizers* add checks to the machine code. For example, before every
 
 ### 6. Run
 
-`make test` runs every program. You can also run them one by one:
+`make test` runs every program (it calls `autofuzz run`). You can also run
+them one by one:
 
 ```bash
 make build
-cd Tests/legacy_thesis
-./deterministic_edge_ComputeChecksumFromNumbers
-./random_fuzz_ComputeChecksumFromNumbers -max_total_time=10 ./lf_corpus
+cd Tests/legacy_thesis/autofuzz-out
+./bin/deterministic_edge_ComputeChecksumFromNumbers
+./bin/random_fuzz_ComputeChecksumFromNumbers -max_total_time=10 corpus/random_fuzz_ComputeChecksumFromNumbers
 ```
 
 ### 7. Error message
@@ -151,29 +155,29 @@ copied from `Tests/results/edge.log` (long paths shortened):
 ```
 [==========] deterministic_edge_ComputeChecksumFromNumbers: Running 12 test(s).
 [ RUN      ] test_ComputeChecksumFromNumbers_edge_1
-test_common.c:162:24: runtime error: signed integer overflow: -2147483648 + -2147483648 cannot be represented in type 'int'
+.../Tests/legacy_thesis/test_common.c:162:24: runtime error: signed integer overflow: -2147483648 + -2147483648 cannot be represented in type 'int'
     #0 0x4c66b6 in ComputeChecksumFromNumbers .../Tests/legacy_thesis/test_common.c:162:24
-    #1 0x4c33d4 in test_ComputeChecksumFromNumbers_edge_1 .../Tests/legacy_thesis/./deterministic_edge_ComputeChecksumFromNumbers.c:22:5
+    #1 0x4c33d4 in test_ComputeChecksumFromNumbers_edge_1 .../Tests/legacy_thesis/autofuzz-out/gen/deterministic_edge_ComputeChecksumFromNumbers.c:22:5
     #2 0x7f70bc434f30 in cmocka_run_one_test_or_fixture (/usr/local/lib/libcmocka.so.0+0x8f30)
 ```
 
 Read it like this:
 
-- `test_common.c:162:24`: file, line and column of the bug.
+- `.../test_common.c:162:24`: file, line and column of the bug.
 - `signed integer overflow: -2147483648 + -2147483648`: what went wrong, and
   the values.
 - `#0`, `#1`, …: the *stack trace*. `#0` is the function where the bug is;
   `#1` is the test that called it.
 
 **Fuzzer**: libFuzzer finds random values that overflow in less than one
-second. The real output, from `Tests/results/fuzz.log`:
+second. The real output, from `Tests/results/fuzz.log` (long paths shortened):
 
 ```
-test_common.c:162:24: runtime error: signed integer overflow: 2140273916 + 235802126 cannot be represented in type 'int'
+.../Tests/legacy_thesis/test_common.c:162:24: runtime error: signed integer overflow: 2140273916 + 235802126 cannot be represented in type 'int'
     #0 0x5516b6 in ComputeChecksumFromNumbers .../Tests/legacy_thesis/test_common.c:162:24
-    #1 0x54ddfb in LLVMFuzzerTestOneInput .../Tests/legacy_thesis/./random_fuzz_ComputeChecksumFromNumbers.c:20:5
+    #1 0x54ddfb in LLVMFuzzerTestOneInput .../Tests/legacy_thesis/autofuzz-out/gen/random_fuzz_ComputeChecksumFromNumbers.c:20:5
     ...
-SUMMARY: UndefinedBehaviorSanitizer: signed-integer-overflow test_common.c:162:24 in
+SUMMARY: UndefinedBehaviorSanitizer: signed-integer-overflow .../Tests/legacy_thesis/test_common.c:162:24 in
 MS: 1 ChangeBit-; base unit: 80e9dd3300d6fd2e9eeeaf169db82de72b0f1ab5
 0xfc,0xfc,0x91,0x7f,0xe,0xe,0xe,0xe,
 \xfc\xfc\x91\x7f\x0e\x0e\x0e\x0e
@@ -182,11 +186,11 @@ artifact_prefix='crashes/'; Test unit written to crashes/crash-15e19b07df8b5fd68
 
 The 8 bytes are the input: `fc fc 91 7f` is `2140273916` and
 `0e 0e 0e 0e` is `235802126` (little-endian). The input is saved in
-`crashes/`. To run it again:
+`autofuzz-out/crashes/`. To run it again:
 
 ```bash
-cd Tests/legacy_thesis
-./random_fuzz_ComputeChecksumFromNumbers crashes/crash-<id>
+cd Tests/legacy_thesis/autofuzz-out
+./bin/random_fuzz_ComputeChecksumFromNumbers crashes/crash-<id>
 ```
 
 (The values change on every run, because the fuzzer is random. The bug is
@@ -213,7 +217,7 @@ you must delete them from the expected list too.
 | Word | Meaning |
 |---|---|
 | **harness** | A small C program that calls the function under test. A fuzz harness has the function `LLVMFuzzerTestOneInput(data, size)` and turns the bytes into arguments. |
-| **corpus** | A folder of inputs for a fuzzer. libFuzzer starts from these inputs and saves new ones that reach new code. Here: `lf_corpus/`, and `Tests/fuzz_manual/corpus/` (seeds stored in git). |
+| **corpus** | A folder of inputs for a fuzzer. libFuzzer starts from these inputs and saves new ones that reach new code. Here: `autofuzz-out/corpus/<fuzzer>/`, and `Tests/fuzz_manual/corpus/` (seeds stored in git). |
 | **dictionary** | A list of words (for example `"1234"` or `","`) that the fuzzer puts into its inputs. It helps the fuzzer get past checks like a password. Here: `Tests/fuzz_manual/*.dict`. |
 | **sanitizer** | A compiler option that adds checks to the program. **AddressSanitizer** (ASan) finds memory errors, for example reading past the end of a buffer. **UndefinedBehaviorSanitizer** (UBSan) finds undefined behaviour, for example signed integer overflow. Each prints the file and line. |
 | **libFuzzer** | A fuzzer built into clang (`-fsanitize=fuzzer`). It calls the harness millions of times with changed inputs, and stops when the program crashes or a sanitizer reports an error. |

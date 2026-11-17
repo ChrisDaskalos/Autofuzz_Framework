@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Two things live together here:
 
 1. **STM32F103 servo firmware** (`Core/`, `Drivers/`, `ServoProject.ioc`): receives commands over UART (DMA + idle-line callback in `main.c`), runs a password → menu → servo-command state machine (`Core/Src/protocol.c`), and ramps a PWM servo (`Core/Src/servo.c`). Built only in **STM32CubeIDE** — the Makefiles here do not build firmware. `.project`/`.cproject` are not tracked; import via the `.ioc`.
-2. **AutoFuzz** (MSc thesis tool, `Tests/`): a Python/libclang generator that writes CMocka edge tests and libFuzzer harnesses for C functions, plus hand-written fuzzers and unit tests, all built with clang + ASan/UBSan on the PC.
+2. **AutoFuzz** (MSc thesis tool): the Python package `autofuzz/` (command `autofuzz` = `python3 -m autofuzz`) reads a project's `autofuzz.yaml`, uses libclang to write CMocka edge tests and libFuzzer harnesses for its C functions, compiles them with clang + ASan/UBSan and runs them on the PC. `Tests/` holds the thesis example plus hand-written fuzzers and unit tests.
 
 ## Roadmap
 
@@ -16,20 +16,24 @@ Work follows [docs/ROADMAP.md](docs/ROADMAP.md) (AutoFuzz 1.0, milestones M2–M
 ## Commands (run from repo root)
 
 ```bash
-make deps        # check clang, libFuzzer, CMocka, Python libclang
-make build       # run AutoFuzz generator, then compile everything
-make test        # unit + edge + short fuzz (TEST_FUZZ_SECS=10) + manual fuzz, then Tests/check_results.py (~3 min)
+make deps        # = autofuzz check: clang, CMocka, sanitizer/libFuzzer runtimes, libclang, PyYAML (prints install commands)
+make build       # unit tests + `autofuzz build` (legacy config) + manual fuzzers
+make test        # unit + `autofuzz run --fresh` (edge + 10 s fuzz) + manual fuzz + check-determinism, then Tests/check_results.py (~3 min)
+make check-determinism   # `autofuzz generate` twice, diff -r
 make fuzz        # longer fuzzing, FUZZ_MAX_SECS each (default 60)
 make clean
 docker build -t autofuzz . && docker run --rm autofuzz   # same as make test, in Ubuntu 24.04 + clang 18
+docker build -f Dockerfile.ubuntu20 -t autofuzz:ubuntu20 .   # Ubuntu 20.04, Python 3.8, clang 10
+python3 -m autofuzz run --config Tests/legacy_thesis/autofuzz.yaml [--only edge|fuzz] [--fuzz-seconds N] [--fresh]
 ```
 
-Python deps: `python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt`.
+Python deps: `python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt` (libclang, PyYAML). The Makefiles run the tool with `PYTHONPATH=<repo>`, so `pip install .` is optional. Must stay compatible with **Python 3.8** (no `list[int]` hints, no `match`, no `importlib.resources.files`); the developer VM is Ubuntu 20.04 + clang 10.
 
 Running a subset:
 - `make -C Tests/legacy_thesis unit|edge|fuzz` (each requires `make build` first).
-- A single unit test / edge test: `cd Tests/legacy_thesis && ./test_protocol_checksum.elf` or `./deterministic_edge_<Function>`.
-- A single fuzzer: `cd Tests/legacy_thesis && ./random_fuzz_<Function> -max_total_time=10 ./lf_corpus`.
+- A single unit test: `cd Tests/legacy_thesis && ./test_protocol_checksum.elf`.
+- A single edge test: `cd Tests/legacy_thesis/autofuzz-out && ./bin/deterministic_edge_<Function>`.
+- A single fuzzer: `cd Tests/legacy_thesis/autofuzz-out && ./bin/random_fuzz_<Function> -max_total_time=10 corpus/random_fuzz_<Function>`.
 - A single manual fuzzer: `make -C Tests/fuzz_manual run-fuzz_protocol_cmd FUZZ_MAX_SECS=30` (output in `Tests/fuzz_manual/out/`).
 - Reproduce a crash: run the fuzzer binary with the crash file as its only argument.
 
@@ -44,16 +48,16 @@ Consequences:
 
 ## Architecture of the test side
 
-User-facing docs: `docs/ARCHITECTURE.md` (flow diagram, commands, folder map), `docs/HOW_IT_WORKS.md` (worked example + glossary, quotes real log output), `docs/FINDINGS.md`. README.md is intentionally short and links to these.
+User-facing docs: `docs/ARCHITECTURE.md` (flow diagram, commands, folder map), `docs/HOW_IT_WORKS.md` (worked example + glossary, quotes real log output), `docs/FINDINGS.md`, `docs/CONFIG.md` (every YAML key), `docs/INSTALL.md`. README.md is intentionally short and links to these.
 
+- **`autofuzz/`** (the tool). `__main__.py` (CLI: init/check/generate/build/run/clean) → `config.py` (loads `autofuzz.yaml` merged over `defaults.yaml`; strict schema, unknown key = error; paths relative to the YAML) → `main.py:generate()` → `scanner.py` (libclang: non-static functions defined in each `sources` file; edge values per type plus literals/comparisons/switch cases; `limits.int_ranges`) → `generator.py` (caps to `limits.edge_cap`; writes `deterministic_edge_<fn>.c` and `random_fuzz_<fn>.c` into `<output_dir>/gen`) → `runner.py` (checks tools and prints install commands; compiles with clang via subprocess; runs; logs to `<output_dir>/logs/{edge,fuzz}.log`). **Nothing project-specific may be in the Python code** — headers come from `harness.includes`, struct preparation from `harness.setup`, test strings from `limits.string_seeds`. Output must stay deterministic (sorted, no timestamps).
 
-- **`Tests/legacy_thesis/`** (the thesis example, formerly `Tests/unit_tests`) tests a **PC copy** of the firmware logic in `test_common.c/.h` (with fake HAL), not `Core/Src` directly (`PROD_SRCS` is empty). It also has its own `protocol_defs.h`/`servo_defs.h` that differ slightly from `Core/Inc`. Keep this in mind when a change to the firmware should also be mirrored in the copy (or vice versa).
-  - `autofuzz/main.py` → `scanner.py` (libclang: non-static functions with parameters; collects edge values from `config.py` per type plus literals/comparisons/switch cases in the source) → `generator.py` (caps to `EDGE_CAP`=12 values per parameter; writes `deterministic_edge_<fn>.c` and `random_fuzz_<fn>.c`). Output is deterministic. The file scanned is `STUB_SRC` (Makefile var).
-  - Generation is stamped by `_autofuzz.stamp`; it reruns when `test_common.c` or the autofuzz Python files change.
-  - `test_*.c` (excluding `test_common.c`) are hand-written CMocka tests, each built into `test_*.elf`.
-  - Generated `.c` files, binaries, `build/`, `crashes/`, `lf_corpus/`, `logs/` are gitignored — never commit them.
+- **`Tests/legacy_thesis/`** (the thesis example, formerly `Tests/unit_tests`) tests a **PC copy** of the firmware logic in `test_common.c/.h` (with fake HAL), not `Core/Src` directly (M4 will point AutoFuzz at `Core/Src`). It also has its own `protocol_defs.h`/`servo_defs.h` that differ slightly from `Core/Inc`. Keep this in mind when a change to the firmware should also be mirrored in the copy (or vice versa).
+  - `Tests/legacy_thesis/autofuzz.yaml` points AutoFuzz at `test_common.c` and holds the servo-specific seeds and the `ProtocolContext` setup. Its output goes to `Tests/legacy_thesis/autofuzz-out/`; the root `make test` copies the edge/fuzz logs to `Tests/results/`.
+  - `Tests/legacy_thesis/Makefile` builds only the hand-written CMocka tests (`test_*.c` except `test_common.c` → `test_*.elf`); its `edge`/`fuzz` targets call `autofuzz run --only ...`.
+  - `autofuzz-out/`, binaries, `build/`, `Tests/results/` are gitignored — never commit them.
 - **`Tests/fuzz_manual/`** hand-written libFuzzer harnesses that link the **real** `Core/Src/protocol.c` and `servo.c` compiled with `-DUNIT_TEST -DFUZZING -DSTRICT_HAL_STUBS`. Firmware sources switch includes on `#ifdef UNIT_TEST` to pull in `Tests/fuzz_manual/test_common.h` (HAL stubs — distinct from the legacy_thesis one). `fuzz_uart_dma.c` is a copy of the DMA idle-callback logic from `main.c`; its fake DMA counter is limited to 0..`DMA_BUFFER_SIZE` (1024) to match hardware. `fuzz_custom_mutator.c` is linked into all harnesses. `corpus/` is committed read-only seeds; new inputs go to `work_corpus/`. `mock_protocol_multi.c` is not built.
-- **CI** (`.github/workflows/unit-and-fuzz.yml`): native Ubuntu 24.04 job and Docker job both run `make test`; manual dispatch adds a long `make fuzz`.
+- **CI** (`.github/workflows/unit-and-fuzz.yml`): native Ubuntu 24.04 job, Docker job, and `ubuntu20` job (`Dockerfile.ubuntu20`: Python 3.8 + clang 10) all run `make test`; manual dispatch adds a long `make fuzz`.
 
 ## Firmware conventions
 

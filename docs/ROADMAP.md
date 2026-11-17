@@ -10,7 +10,7 @@ registers, a graphical interface.
 
 - [x] 1. A fresh clone works with 3 commands, and GitHub Actions is green. (`phase1-runnable`)
 - [x] 2. A new person understands the project in 10 minutes from the docs. (`m2-docs`)
-- [ ] 3. The user runs one command and edits one config file (`autofuzz.yaml`). Nobody edits Python code. (M3)
+- [x] 3. The user runs one command and edits one config file (`autofuzz.yaml`). Nobody edits Python code. (`m3-config`)
 - [ ] 4. It tests the real source files of the servo project, not the copy `test_common.c`. (M4)
 - [ ] 5. It also works on a second, small C project, to show that it is not tied to this firmware. (M5)
 - [ ] 6. The report says in plain words what failed: file, line, input, and the command to repeat it. (M6)

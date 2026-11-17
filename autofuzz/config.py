@@ -102,7 +102,7 @@ def _check(data: Any, schema: Dict[str, Any], where: str, src: str) -> None:
         if kind == RANGES:
             for name, rng in value.items():
                 if "." not in str(name):
-                    raise ConfigError(f"{src}: '{path}.{name}': write the key as Function.parameter, e.g. Servo_SetAngle.angle.")
+                    raise ConfigError(f"{src}: '{path}.{name}': write the key as Function.parameter, e.g. Motor_SetSpeed.rpm.")
                 if (not isinstance(rng, list) or len(rng) != 2
                         or not all(isinstance(x, int) and not isinstance(x, bool) for x in rng) or rng[0] > rng[1]):
                     raise ConfigError(f"{src}: '{path}.{name}' must be [min, max] with min <= max, not {rng!r}.")
