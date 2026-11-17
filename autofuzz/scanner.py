@@ -1,11 +1,13 @@
 # File: autofuzz/scanner.py
 """
-CORRECTED VERSION - Better character literal handling and type normalization
+Find the functions to test (libclang) and collect edge values for each
+parameter: default values per C type (from the config), plus the literals,
+comparisons and switch cases found in the function body.
 """
 import pathlib
 from typing import Sequence, Set, List, Optional, Tuple, Dict
 from clang import cindex
-from .config import GENERIC_EDGES, STRING_SEEDS
+from .config import Config
 
 def arg_count(cur: cindex.Cursor) -> int:
     """Return number of formal parameters (works with old/new libclang)."""
@@ -51,7 +53,8 @@ def extract_character_literal(node: cindex.Cursor) -> Optional[str]:
 
 class DomainConstraint:
     """Represents constraints on a parameter's valid domain."""
-    def __init__(self, param_name: str, param_type: str):
+    def __init__(self, param_name: str, param_type: str, generic: Dict[str, list]):
+        self.generic = generic
         self.param_name = param_name
         self.param_type = param_type
         self.min_value: Optional[int] = None
@@ -97,7 +100,7 @@ class DomainConstraint:
         edges.update(str(v) for v in self.exact_values)
         
         if not edges and self.param_type != "const char *":
-            edges.update(map(str, GENERIC_EDGES.get(self.param_type, [0, 1, -1])))
+            edges.update(map(str, self.generic.get(self.param_type, [0, 1, -1])))
         
         return edges
 
@@ -105,12 +108,13 @@ def scan_function_enhanced(
     fn_cursor: cindex.Cursor,
     param_types: Sequence[str],
     param_names: Sequence[str],
+    cfg: Config,
 ) -> Tuple[List[Set[str]], List[DomainConstraint]]:
     """Analyse function and return both edge values and domain constraints."""
-    constraints = [DomainConstraint(name, ptype) 
+    constraints = [DomainConstraint(name, ptype, cfg.generic_edges)
                   for name, ptype in zip(param_names, param_types)]
     
-    edges: List[Set[str]] = [set(GENERIC_EDGES.get(t, [])) for t in param_types]
+    edges: List[Set[str]] = [set(cfg.generic_edges.get(t, [])) for t in param_types]
     string_literals: Set[str] = set()
     
     param_index = {name: i for i, name in enumerate(param_names)}
@@ -164,10 +168,21 @@ def scan_function_enhanced(
         else:
             # For strings, use collected literals plus defaults
             edges[i].update(string_literals)
-            edges[i].update(STRING_SEEDS)
+            edges[i].update(cfg.string_seeds)
             edges[i].update(constraint.string_patterns)
-    
+
+    # limits.int_ranges in the YAML: the valid range of one parameter.
+    for i, name in enumerate(param_names):
+        rng = cfg.int_range(fn_cursor.spelling, name)
+        if rng is not None:
+            edges[i] = int_range_edges(rng[0], rng[1])
+
     return edges, constraints
+
+def int_range_edges(lo: int, hi: int) -> Set[str]:
+    """Values just outside, on, and just inside both ends of [lo, hi]."""
+    vals = {lo - 1, lo, lo + 1, (lo + hi) // 2, hi - 1, hi, hi + 1}
+    return {str(v) for v in vals}
 
 def _analyze_comparison(
     node: cindex.Cursor,
@@ -299,16 +314,18 @@ def scan_function(
     fn_cursor: cindex.Cursor,
     param_types: Sequence[str],
     param_names: Sequence[str],
+    cfg: Config,
 ) -> List[Set[str]]:
     """Analyse one function and return edge values."""
-    edges, _ = scan_function_enhanced(fn_cursor, param_types, param_names)
+    edges, _ = scan_function_enhanced(fn_cursor, param_types, param_names, cfg)
     return edges
 
 def extract_targets(
     tu: cindex.TranslationUnit,
-    stub_name: str,
+    source: pathlib.Path,
 ) -> List[cindex.Cursor]:
-    """Return all FUNCTION_DECL cursors that are testable."""
+    """Return the non-static functions defined in `source` itself."""
+    want = pathlib.Path(source).resolve()
     targets: List[cindex.Cursor] = []
     for cur in tu.cursor.get_children():
         if (
@@ -316,7 +333,7 @@ def extract_targets(
             or not cur.is_definition()
         ):
             continue
-        if pathlib.Path(cur.location.file.name).name != stub_name:
+        if cur.location.file is None or pathlib.Path(cur.location.file.name).resolve() != want:
             continue
         if cur.linkage is cindex.LinkageKind.INTERNAL:
             continue

@@ -1,0 +1,59 @@
+# AutoFuzz default settings.
+#
+# Your project's autofuzz.yaml is merged on top of this file. Every key
+# you set there replaces the value here, except limits.string_seeds, which
+# is added to the list below. See docs/CONFIG.md.
+
+sources: []
+include_dirs: []
+defines: []
+cflags: [-std=c11]
+compiler: clang
+
+functions:
+  include: []          # empty = every non-static function in `sources`
+  exclude: []
+
+limits:
+  edge_cap: 12         # at most this many values per parameter
+  buffer_size: 4096    # size of the text buffer a fuzzer passes to char * parameters
+  int_ranges: {}
+  default_string_seeds: true
+  # Generic text inputs for every `char *` parameter. They are written as
+  # plain YAML text; AutoFuzz turns them into C string literals.
+  string_seeds:
+    - ""
+    - " "
+    - "  "
+    - "\t"
+    - "\r\n"
+    - "\n"
+    - "\r"
+    - "\r\n\r\n"
+    - "\0"
+    - "\0\0"
+    - "\xff\xff"
+    - {repeat: A, times: 63}
+    - {repeat: A, times: 64}
+    - {repeat: A, times: 65}
+    - {repeat: A, times: 100}
+    - "0"
+    - "1"
+    - "-1"
+    - "255"
+    - "256"
+    - "32767"
+    - "32768"
+    - "65535"
+    - "2147483647"
+    - "-2147483648"
+
+harness:
+  includes: []
+  setup: []
+
+fuzz:
+  seconds: 10
+  rss_limit_mb: 600
+
+output_dir: autofuzz-out

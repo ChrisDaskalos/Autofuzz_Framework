@@ -1,0 +1,94 @@
+# AutoFuzz config for the legacy thesis example.
+#
+# It tests test_common.c, the PC copy of the servo firmware logic (see
+# docs/FINDINGS.md). Paths are relative to this file.
+#
+#   python3 -m autofuzz run --config Tests/legacy_thesis/autofuzz.yaml
+#
+# All keys are explained in docs/CONFIG.md.
+
+sources:
+  - test_common.c
+
+include_dirs:
+  - .                 # protocol.h, test_common.h, *_defs.h of the copy
+  - ../../Core/Inc
+
+defines:
+  - UNIT_TEST
+  - _POSIX_C_SOURCE=200809L
+
+functions:
+  include: []         # all functions in test_common.c
+  exclude: []
+
+limits:
+  edge_cap: 12
+  buffer_size: 4096
+  # Added to the default seeds in autofuzz/defaults.yaml
+  string_seeds:
+    # Password and menu
+    - "1234"          # the valid password
+    - "unlock"
+    - "WRONG"
+    - "LOCK"
+    - "1"
+    - "2"
+    - "3"
+    - "4"
+    - "0"
+    - "5"
+    - "9"
+    # Cancel
+    - "B"
+    - "b"
+    - "C"
+    # Servo commands (angle,step,checksum): valid
+    - "(90,5,95)"
+    - "(0,1,1)"
+    - "(180,5,185)"
+    - "(100,10,110)"
+    # Servo commands: edge cases
+    - "(181,5,186)"
+    - "(90,0,90)"
+    - "(255,1,0)"
+    - "(180,255,179)"
+    - "(-1,1,0)"
+    # Servo commands: malformed
+    - "(90,5,99)"
+    - "(90,5)"
+    - "90,5,95"
+    - "(90,5,95"
+    - "90,5,95)"
+    - "(,5,95)"
+    - "(90,,95)"
+    - "(90,5,)"
+    - "()"
+    - "(,,)"
+    - "(abc,def,ghi)"
+    - "(  90  ,  5  ,  95  )"
+    # Around DMA_BUFFER_SIZE (1024): finds Bug 1 in the copy
+    - {repeat: A, times: 1022}
+    - {repeat: A, times: 1023}
+    - {repeat: A, times: 1050}
+    - {repeat: A, times: 2000}
+    - {repeat: A, times: 4095}
+    - {repeat: A, times: 1050, prefix: "(", suffix: ")"}
+
+harness:
+  includes:
+    - test_common.h
+  # Every ProtocolContext * parameter gets a context that is logged in
+  # and waiting for a servo command. (Skipped for reset_ctx itself.)
+  setup:
+    - type: ProtocolContext
+      var: ctx
+      lines:
+        - reset_ctx(&ctx);
+        - ctx.authenticated = 1;
+        - ctx.state = STATE_WAIT_SERVO;
+
+fuzz:
+  seconds: 10
+
+output_dir: autofuzz-out

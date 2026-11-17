@@ -1,7 +1,9 @@
 # File: autofuzz/main.py
+"""Scan the sources from the config and write the harness .c files."""
 import os
 import sys
 import re
+import shutil
 from pathlib import Path
 from typing import List, Tuple
 
@@ -19,7 +21,8 @@ if _clang_lib and not cindex.Config.loaded:
     else:
         cindex.Config.set_library_file(_clang_lib)
 
-from .config import STUB_SOURCES
+from . import config as config_mod
+from .config import Config
 from . import scanner
 from . import generator
 
@@ -92,63 +95,71 @@ def _regex_fallback(paths: List[Path]) -> List[Tuple[str, List[str]]]:
     return [(k, seen[k]) for k in sorted(seen.keys())]
 
 # -------- main flow ----------
-def run() -> None:
-    stub_list = [Path(s) for s in (STUB_SOURCES or ["test_common.c"])]
-    # also consider sibling headers
-    probe: List[Path] = []
-    for p in stub_list:
-        probe.append(p)
-        stem = p.with_suffix("")
-        for ext in (".h", ".hpp", ".c"):
-            cand = stem.with_suffix(ext)
-            if cand not in probe:
-                probe.append(cand)
+def generate(cfg: Config, out_dir: Path, quiet: bool = False) -> List[str]:
+    """
+    Write deterministic_edge_<fn>.c and random_fuzz_<fn>.c for every target
+    function into `out_dir`. Returns the target names (sorted).
+    Same config + same sources -> the same files, byte for byte.
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for old in list(out_dir.glob("deterministic_edge_*.c")) + list(out_dir.glob("random_fuzz_*.c")):
+        old.unlink()  # a function that was removed must not keep its old harness
 
-    edge_out = Path(".")   # force write where Makefile looks
-    fuzz_out = Path(".")   # same
-
-    # Try clang first
     index = cindex.Index.create()
-    # parse first stub (good enough: our fallback handles the rest)
-    tu = None
-    for p in stub_list:
-        if p.exists():
-            args = []  # you can add include dirs here if needed
-            try:
-                tu = index.parse(str(p), args=args)
-                break
-            except Exception:
+    found = {}   # name -> (param types, edges)
+    excluded: List[str] = []
+    for src in cfg.sources:
+        try:
+            tu = index.parse(str(src), args=cfg.clang_args())
+        except cindex.TranslationUnitLoadError:
+            tu = None
+        targets = scanner.extract_targets(tu, src) if tu is not None else []
+        if targets:
+            for fn in targets:
+                if not cfg.wants_function(fn.spelling):
+                    excluded.append(fn.spelling)
+                    continue
+                ptypes, pnames = _param_types_and_names(fn)
+                found[fn.spelling] = (ptypes, scanner.scan_function(fn, ptypes, pnames, cfg))
+            continue
+        # libclang found nothing: regex fallback over the file + its header
+        probe = [src, src.with_suffix(".h")]
+        for name, ptypes in _regex_fallback(probe):
+            if not cfg.wants_function(name):
+                excluded.append(name)
                 continue
+            found[name] = (ptypes, [set() for _ in ptypes])  # empty -> defaults per type
 
-    targets = []
-    if tu is not None:
-        targets = scanner.extract_targets(tu, stub_list[0].name if stub_list else "test_common.c")
+    names = sorted(found)
+    for name in names:
+        ptypes, edges = found[name]
+        generator.emit_edge_harness(name, ptypes, edges, out_dir, cfg)
+        generator.emit_libfuzzer_harness(name, ptypes, out_dir, cfg)
 
-    # If clang found nothing, use regex fallback over stubs + sibling headers
-    if not targets:
-        pairs = _regex_fallback(probe)
-        if not pairs:
-            print("autofuzz: no targets found (clang+regex). Nothing to do.", file=sys.stderr)
-            return
-        print(f"autofuzz: regex targets -> {', '.join(n for n,_ in pairs)}")
-        for name, ptypes in pairs:
-            # edges empty → generator falls back to default seeds per type
-            edges = [set() for _ in ptypes]
-            generator.emit_deterministic_harness(name, ptypes, edges, edge_out)
-            generator.emit_libfuzzer_harness(name, ptypes, edges, fuzz_out)
-        return
+    if not quiet:
+        if names:
+            print(f"autofuzz: targets -> {', '.join(names)}")
+        else:
+            print("autofuzz: no target functions found in 'sources'.", file=sys.stderr)
+        if excluded:
+            print(f"autofuzz: left out by functions.include/exclude -> {', '.join(sorted(set(excluded)))}")
+    return names
 
-    # clang path
-    names = []
-    for fn in targets:
-        ptypes, pnames = _param_types_and_names(fn)
-        edges = scanner.scan_function(fn, ptypes, pnames)
-        names.append(fn.spelling)
-        # rtype not needed by generator; it accepts both call shapes
-        generator.emit_deterministic_harness(fn.spelling, ptypes, edges, edge_out)
-        generator.emit_libfuzzer_harness(fn.spelling, ptypes, edges, fuzz_out)
 
-    print(f"autofuzz: clang targets -> {', '.join(names)}")
+def run() -> None:
+    """Old entry point: python3 -m autofuzz.main [--config FILE] [--out DIR]."""
+    import argparse
+    ap = argparse.ArgumentParser(prog="python3 -m autofuzz.main")
+    ap.add_argument("--config", default=None)
+    ap.add_argument("--out", default=".")
+    a = ap.parse_args()
+    try:
+        cfg = config_mod.load(a.config)
+    except config_mod.ConfigError as e:
+        config_mod.die(e)
+    generate(cfg, Path(a.out))
+
 
 if __name__ == "__main__":
     run()

@@ -1,27 +1,30 @@
 # File: autofuzz/generator.py
 """
-FINAL VERSION - Recognizes INT_MAX both as constant and literal value
+Write the test programs for one function:
+  deterministic_edge_<fn>.c  CMocka test that calls <fn> with edge values
+  random_fuzz_<fn>.c         libFuzzer harness that calls <fn> with random input
+
+Nothing here is specific to one project: header names, struct setup and
+limits all come from the Config (autofuzz.yaml).
 """
 from pathlib import Path
-from typing import Sequence, Set, List, Any, Dict
+from typing import Sequence, Set, List, Any, Dict, Optional
 import re
 import itertools
 
-from .config import EDGE_CAP, STRING_SEEDS, GENERIC_EDGES, FZ_MAX_LEN
+from .config import Config, SetupEntry
 
 # ─────────────────────────────────────────────────────────────────────
 # Type detection helpers
 # ─────────────────────────────────────────────────────────────────────
-_PROTOCTX_PTR = re.compile(r"\bProtocolContext\s*\*")
-
 def _clean_type(pt: str) -> str:
     t = pt.replace("const", "").strip()
     t = " ".join(t.split())
     t = t.replace(" *", "*").replace("* ", "*")
     return t
 
-def _canonical_key_for_generic(pt: str) -> str:
-    """Map a parameter type to a key that likely exists in GENERIC_EDGES."""
+def _canonical_key_for_generic(pt: str, GENERIC_EDGES: Dict[str, Any]) -> str:
+    """Map a parameter type to a key that likely exists in the edge table."""
     raw = pt.strip()
     t = _clean_type(raw)
     if t in GENERIC_EDGES:
@@ -76,8 +79,26 @@ def _is_integer_type(pt: str) -> bool:
     }
     return t in int_types
 
-def _needs_protocol_ctx(param_types: Sequence[str]) -> bool:
-    return bool(param_types and _PROTOCTX_PTR.search(param_types[0]))
+def _setups(func: str, param_types: Sequence[str], cfg: Config) -> Dict[int, SetupEntry]:
+    """Parameters that get a prepared struct from harness.setup: {index: entry}."""
+    out: Dict[int, SetupEntry] = {}
+    for i, pt in enumerate(param_types):
+        entry = cfg.setup_for(pt)
+        if entry is not None:
+            out[i] = entry
+    return out
+
+def _setup_lines(func: str, setups: Dict[int, SetupEntry], indent: str = "    ") -> List[str]:
+    """Declare each prepared struct, then run its setup lines.
+    The lines are skipped when they call the function under test itself
+    (for example reset_ctx: it is the setup)."""
+    out: List[str] = []
+    for i in sorted(setups):
+        e = setups[i]
+        out.append(f"{indent}{e.type_name} {e.var};")
+        if not e.calls(func):
+            out += [f"{indent}{line}" for line in e.lines]
+    return out
 
 # ─────────────────────────────────────────────────────────────────────
 # Token normalization helpers
@@ -131,12 +152,13 @@ def _clamp_signed32(tok: str, raw: Any) -> str:
 # ─────────────────────────────────────────────────────────────────────
 # Edge value generation
 # ─────────────────────────────────────────────────────────────────────
-def _lookup_generic_edges_for_type(pt: str) -> List[Any]:
+def _lookup_generic_edges_for_type(pt: str, cfg: Config) -> List[Any]:
     """Get edge values for a type from config."""
+    EDGE_CAP = cfg.edge_cap
     if _is_string(pt):
-        return STRING_SEEDS[:EDGE_CAP] if STRING_SEEDS else ['""']
-    key = _canonical_key_for_generic(pt)
-    vals = GENERIC_EDGES.get(key)
+        return cfg.string_seeds[:EDGE_CAP] if cfg.string_seeds else ['""']
+    key = _canonical_key_for_generic(pt, cfg.generic_edges)
+    vals = cfg.generic_edges.get(key)
     if vals:
         return vals[:EDGE_CAP]
     if _is_pointer(pt):
@@ -158,7 +180,7 @@ def _seed_sort_key(raw: Any):
     except ValueError:
         return (1, len(s), s)
 
-def _ordered_seeds(seeds: Any) -> List[Any]:
+def _ordered_seeds(seeds: Any, EDGE_CAP: int) -> List[Any]:
     """
     Turn the scanner's *set* of seeds into a list with a fixed order.
 
@@ -179,13 +201,14 @@ def _ordered_seeds(seeds: Any) -> List[Any]:
     picks = sorted({round(j * (n - 1) / (k - 1)) for j in range(k)})
     return [ordered[p] for p in picks]
 
-def _seed_list(pt: str, seeds: List[Any]) -> List[str]:
+def _seed_list(pt: str, seeds: List[Any], cfg: Config) -> List[str]:
     """
     Turn a list of raw seeds into C tokens, ensuring extremes for integers.
-    FIXED: Removes duplicates and guarantees INT_MIN/INT_MAX presence.
+    Removes duplicates and guarantees INT_MIN/INT_MAX presence.
     """
+    EDGE_CAP = cfg.edge_cap
     if not seeds:
-        seeds = _lookup_generic_edges_for_type(pt)
+        seeds = _lookup_generic_edges_for_type(pt, cfg)
 
     out: List[str] = []
     for raw in seeds[:EDGE_CAP]:
@@ -240,8 +263,8 @@ def _make_arg_decl(i: int, pt: str) -> str:
 # ─────────────────────────────────────────────────────────────────────
 # Smart test combination generation
 # ─────────────────────────────────────────────────────────────────────
-def _generate_test_combinations(seeds_per_param: List[List[str]], 
-                                needs_ctx: bool,
+def _generate_test_combinations(seeds_per_param: List[List[str]],
+                                skip: Set[int],
                                 max_tests: int = 12) -> List[List[str]]:
     """
     Generate smart combinations ensuring extremes are tested.
@@ -249,7 +272,7 @@ def _generate_test_combinations(seeds_per_param: List[List[str]],
     """
     testable_seeds = []
     for i, seeds in enumerate(seeds_per_param):
-        if needs_ctx and i == 0:
+        if i in skip:
             continue
         if seeds:
             testable_seeds.append(seeds)
@@ -363,7 +386,10 @@ def _generate_test_combinations(seeds_per_param: List[List[str]],
 # ─────────────────────────────────────────────────────────────────────
 # Edge harness generation (CMocka-based deterministic tests)
 # ─────────────────────────────────────────────────────────────────────
-def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequence[Set[str]]) -> str:
+def _includes(cfg: Config) -> List[str]:
+    return [f'#include "{h}"' for h in cfg.harness_includes]
+
+def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequence[Set[str]], cfg: Config) -> str:
     """Generate CMocka test harness with edge cases for deterministic testing."""
     out: List[str] = [
         '#include <stdarg.h>',
@@ -374,23 +400,20 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
         '#include <stdint.h>',
         '#include <string.h>',
         '',
-        '#include "test_common.h"',
-        ''
-    ]
+    ] + _includes(cfg) + ['']
 
-    needs_ctx = _needs_protocol_ctx(param_types)
-    is_reset_ctx = (func == "reset_ctx")
+    setups = _setups(func, param_types, cfg)
 
     # Generate seed arrays for each parameter
     seeds_per_param: List[List[str]] = []
     for i, pt in enumerate(param_types):
-        if needs_ctx and i == 0:
+        if i in setups:
             seeds_per_param.append([])
             continue
         
-        # Prefer per-function edges if supplied; otherwise consult config.GENERIC_EDGES
-        seed_set_raw = _ordered_seeds(edges[i]) if (i < len(edges) and edges[i] is not None) else []
-        vals = _seed_list(pt, seed_set_raw)
+        # Prefer per-function edges if supplied; otherwise the defaults per type
+        seed_set_raw = _ordered_seeds(edges[i], cfg.edge_cap) if (i < len(edges) and edges[i] is not None) else []
+        vals = _seed_list(pt, seed_set_raw, cfg)
         
         arr_name = f"a{i}_vals"
         init = ", ".join(vals)
@@ -402,7 +425,7 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
         out.append("")
 
     # Generate test combinations
-    test_combinations = _generate_test_combinations(seeds_per_param, needs_ctx, max_tests=12)
+    test_combinations = _generate_test_combinations(seeds_per_param, set(setups), max_tests=12)
 
     # Generate individual test functions
     test_names: List[str] = []
@@ -414,18 +437,13 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
             "    (void)state;",
         ]
 
-        # Setup ProtocolContext if needed
-        if needs_ctx:
-            body.append("    ProtocolContext ctx;")
-            if not is_reset_ctx:
-                body.append("    reset_ctx(&ctx);")
-                body.append("    ctx.authenticated = 1;")
-                body.append("    ctx.state = STATE_WAIT_SERVO;")
+        # Prepared structs (harness.setup in autofuzz.yaml)
+        body += _setup_lines(func, setups)
 
         # Declare and initialize parameters with values from combination
         value_idx = 0
         for i, pt in enumerate(param_types):
-            if needs_ctx and i == 0:
+            if i in setups:
                 continue
             
             # Get value from combination
@@ -447,7 +465,7 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
         # Make the actual function call
         call_args = []
         for i in range(len(param_types)):
-            call_args.append("&ctx" if (needs_ctx and i == 0) else f"a{i}")
+            call_args.append(f"&{setups[i].var}" if i in setups else f"a{i}")
 
         body.append("")
         body.append("    /* Call target function */")
@@ -477,49 +495,22 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
 # ─────────────────────────────────────────────────────────────────────
 # libFuzzer harness generation (Random fuzzing)
 # ─────────────────────────────────────────────────────────────────────
-def _emit_libfuzzer_harness_src(func: str, param_types: Sequence[str]) -> str:
-    """Generate libFuzzer harness for random fuzzing, honoring FZ_MAX_LEN."""
+def _emit_libfuzzer_harness_src(func: str, param_types: Sequence[str], cfg: Config) -> str:
+    """Generate libFuzzer harness for random fuzzing, honoring limits.buffer_size."""
     out: List[str] = [
         '#include <stdint.h>',
         '#include <stddef.h>',
         '#include <string.h>',
         '#include <stdlib.h>',
         '',
-        '#include "test_common.h"',
+    ] + _includes(cfg) + [
         '',
-        f'#define AFZ_FZ_MAX_LEN {int(FZ_MAX_LEN)}',
+        f'#define AFZ_FZ_MAX_LEN {int(cfg.buffer_size)}',
         '',
     ]
 
-    needs_ctx = _needs_protocol_ctx(param_types)
+    setups = _setups(func, param_types, cfg)
     has_strings = any(_is_string(pt) for pt in param_types)
-
-    # Special case for Protocol_ProcessCommand(ctx, char*)
-    if func == "Protocol_ProcessCommand" and len(param_types) == 2 and _is_string(param_types[1]):
-        return "\n".join([
-            '#include <stdint.h>',
-            '#include <stddef.h>',
-            '#include <string.h>',
-            '#include "test_common.h"',
-            '',
-            f'#define AFZ_FZ_MAX_LEN {int(FZ_MAX_LEN)}',
-            '',
-            '/* Random fuzzer for Protocol_ProcessCommand */',
-            'int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {',
-            '    if (!data || size == 0) return 0;',
-            '    size_t n = size < (AFZ_FZ_MAX_LEN-1) ? size : (AFZ_FZ_MAX_LEN-1);',
-            '    char buf[AFZ_FZ_MAX_LEN];',
-            '    memcpy(buf, data, n);',
-            '    buf[n] = \'\\0\';',
-            '    ProtocolContext ctx;',
-            '    reset_ctx(&ctx);',
-            '    ctx.authenticated = 1;',
-            '    ctx.state = STATE_WAIT_SERVO;',
-            '    Protocol_ProcessCommand(&ctx, buf);',
-            '    return 0;',
-            '}',
-            '',
-        ])
 
     # Generic string-based fuzzing
     if has_strings:
@@ -534,21 +525,14 @@ def _emit_libfuzzer_harness_src(func: str, param_types: Sequence[str]) -> str:
             '',
         ]
 
-        if needs_ctx:
-            out += [
-                '    /* Setup protocol context */',
-                '    ProtocolContext ctx;',
-                '    reset_ctx(&ctx);',
-                '    ctx.authenticated = 1;',
-                '    ctx.state = STATE_WAIT_SERVO;',
-                '',
-            ]
+        if setups:
+            out += ['    /* Setup (harness.setup in autofuzz.yaml) */'] + _setup_lines(func, setups) + ['']
 
         # Build call arguments
         call_args = []
         for i, pt in enumerate(param_types):
-            if needs_ctx and i == 0:
-                call_args.append("&ctx")
+            if i in setups:
+                call_args.append(f"&{setups[i].var}")
             elif _is_string(pt):
                 call_args.append("buf")
             elif _is_pointer(pt):
@@ -573,20 +557,13 @@ def _emit_libfuzzer_harness_src(func: str, param_types: Sequence[str]) -> str:
         '',
     ]
 
-    if needs_ctx:
-        out += [
-            '    /* Setup protocol context */',
-            '    ProtocolContext ctx;',
-            '    reset_ctx(&ctx);',
-            '    ctx.authenticated = 1;',
-            '    ctx.state = STATE_WAIT_SERVO;',
-            '',
-        ]
+    if setups:
+        out += ['    /* Setup (harness.setup in autofuzz.yaml) */'] + _setup_lines(func, setups) + ['']
 
     # Extract integers from data bytes
     offset = 0
     for i, pt in enumerate(param_types):
-        if needs_ctx and i == 0:
+        if i in setups:
             continue
         if _is_pointer(pt) and not _is_string(pt):
             out.append(f'    {pt} a{i} = NULL;')
@@ -603,7 +580,7 @@ def _emit_libfuzzer_harness_src(func: str, param_types: Sequence[str]) -> str:
     # Build call
     call_args = []
     for i in range(len(param_types)):
-        call_args.append("&ctx" if (needs_ctx and i == 0) else f"a{i}")
+        call_args.append(f"&{setups[i].var}" if i in setups else f"a{i}")
 
     out += [
         '    /* Call target function with fuzzer-derived inputs */',
@@ -621,34 +598,16 @@ def _write(out_dir: Path, name: str, src: str) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / name).write_text(src, encoding="utf-8")
 
-def emit_edge_harness(func, *rest):
+def emit_edge_harness(func: str, param_types: Sequence[str], edges: Sequence[Set[str]],
+                      out_dir: Path, cfg: Config) -> None:
     """Emit CMocka-based deterministic edge case tests."""
-    if len(rest) == 3:
-        param_types, edges, out_dir = rest
-    elif len(rest) == 4:
-        _rtype, param_types, edges, out_dir = rest
-    else:
-        raise TypeError("emit_edge_harness expects 4 or 5 positional args total")
-    src = _emit_edge_harness_src(func, param_types, edges)
-    _write(out_dir, f"deterministic_edge_{func}.c", src)
+    _write(out_dir, f"deterministic_edge_{func}.c", _emit_edge_harness_src(func, param_types, edges, cfg))
 
-def emit_libfuzzer_harness(func, *rest):
+def emit_libfuzzer_harness(func: str, param_types: Sequence[str], out_dir: Path, cfg: Config) -> None:
     """Emit libFuzzer harness for random fuzzing."""
-    if len(rest) == 3:
-        param_types, _edges, out_dir = rest
-    elif len(rest) == 4:
-        _rtype, param_types, _edges, out_dir = rest
-    else:
-        raise TypeError("emit_libfuzzer_harness expects 4 or 5 positional args total")
-    src = _emit_libfuzzer_harness_src(func, param_types)
-    _write(out_dir, f"random_fuzz_{func}.c", src)
-
-def emit_deterministic_harness(func, *rest):
-    """Alias for emit_edge_harness."""
-    return emit_edge_harness(func, *rest)
+    _write(out_dir, f"random_fuzz_{func}.c", _emit_libfuzzer_harness_src(func, param_types, cfg))
 
 __all__ = [
     "emit_edge_harness",
-    "emit_deterministic_harness",
     "emit_libfuzzer_harness",
 ]
