@@ -13,13 +13,8 @@ Release
 ServoProject.pdf
 
 Tests/legacy_thesis/build
-Tests/legacy_thesis/_autofuzz.stamp
-Tests/legacy_thesis/deterministic_edge_*
-Tests/legacy_thesis/random_fuzz_*
-Tests/legacy_thesis/test_manual
-Tests/legacy_thesis/crashes
-Tests/legacy_thesis/lf_corpus
-Tests/legacy_thesis/logs
+**/autofuzz-out
+.venv
 
 Tests/fuzz_manual/bin
 Tests/fuzz_manual/out

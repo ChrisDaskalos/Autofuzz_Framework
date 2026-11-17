@@ -14,7 +14,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # llvm-18            llvm-symbolizer, so sanitizer reports show file:line
 # build-essential    C library headers, make
 # libcmocka-dev      unit test framework
-# python3-venv       for the AutoFuzz generator (libclang from requirements.txt)
+# python3-venv       for AutoFuzz (libclang + PyYAML from requirements.txt)
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         clang-18 libclang-rt-18-dev llvm-18 \

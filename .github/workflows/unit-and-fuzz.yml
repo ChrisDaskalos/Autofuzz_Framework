@@ -57,7 +57,8 @@ jobs:
           name: test-results-native
           path: |
             Tests/results/
-            Tests/legacy_thesis/crashes/
+            Tests/legacy_thesis/autofuzz-out/crashes/
+            Tests/legacy_thesis/autofuzz-out/logs/
             Tests/fuzz_manual/out/
           if-no-files-found: ignore
 
@@ -94,7 +95,7 @@ jobs:
           mkdir -p fuzz-results
           docker run --rm -e FUZZ_MAX_SECS -v "$PWD/fuzz-results:/out" autofuzz sh -c '
             make fuzz; rc=$?
-            cp -r Tests/legacy_thesis/crashes Tests/legacy_thesis/logs Tests/fuzz_manual/out /out/ 2>/dev/null
+            cp -r Tests/legacy_thesis/autofuzz-out/crashes Tests/legacy_thesis/autofuzz-out/logs Tests/fuzz_manual/out /out/ 2>/dev/null
             exit $rc'
         continue-on-error: true
 

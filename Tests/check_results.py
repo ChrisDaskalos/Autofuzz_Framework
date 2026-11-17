@@ -3,7 +3,9 @@
 Compare the findings of `make test` with Tests/expected_findings.txt.
 
 Reads:
-  Tests/results/unit.log, edge.log, fuzz.log   (output of Tests/legacy_thesis)
+  Tests/results/unit.log                       (hand-written tests, Tests/legacy_thesis)
+  Tests/results/edge.log, fuzz.log             (autofuzz run, copied from
+                                                Tests/legacy_thesis/autofuzz-out/logs/)
   Tests/fuzz_manual/out/<fuzzer>.log           (output of Tests/fuzz_manual)
 
 Prints one line per stage, then as the very last line either
@@ -18,6 +20,7 @@ from pathlib import Path
 TESTS = Path(__file__).resolve().parent
 RESULTS = TESTS / "results"
 UNIT_DIR = TESTS / "legacy_thesis"
+GEN_DIR = UNIT_DIR / "autofuzz-out" / "gen"   # output_dir in its autofuzz.yaml
 MANUAL_DIR = TESTS / "fuzz_manual"
 MANUAL_FUZZERS = ["fuzz_protocol_session", "fuzz_protocol_cmd", "fuzz_uart_dma"]
 STAGES = ["unit", "edge", "fuzz", "manual"]
@@ -82,8 +85,8 @@ def read(path: Path):
 
 def programs_that_must_run():
     unit = sorted(p.stem + ".elf" for p in UNIT_DIR.glob("test_*.c") if p.name != "test_common.c")
-    edge = sorted(p.stem for p in UNIT_DIR.glob("deterministic_edge_*.c"))
-    fuzz = sorted(p.stem for p in UNIT_DIR.glob("random_fuzz_*.c"))
+    edge = sorted(p.stem for p in GEN_DIR.glob("deterministic_edge_*.c"))
+    fuzz = sorted(p.stem for p in GEN_DIR.glob("random_fuzz_*.c"))
     return {"unit": unit, "edge": edge, "fuzz": fuzz, "manual": MANUAL_FUZZERS}
 
 

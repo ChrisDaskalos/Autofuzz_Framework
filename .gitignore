@@ -21,23 +21,10 @@ Release/
 .project
 
 # =============================================================================
-# AutoFuzz (Tests/legacy_thesis) - everything below is recreated by `make build`
+# AutoFuzz - everything below is recreated by `make build` / `make test`
 # =============================================================================
+# Hand-written unit tests of the legacy example (objects; *.elf is above)
 Tests/legacy_thesis/build/
-Tests/legacy_thesis/_autofuzz.stamp
-
-# Generated harness sources and their binaries
-Tests/legacy_thesis/deterministic_edge_*
-Tests/legacy_thesis/random_fuzz_*
-Tests/legacy_thesis/edge_*
-Tests/legacy_thesis/random_*_fz*
-Tests/legacy_thesis/test_manual
-
-# Output of `make fuzz`
-Tests/legacy_thesis/crashes/
-Tests/legacy_thesis/lf_corpus/
-Tests/legacy_thesis/corpus/
-Tests/legacy_thesis/logs/
 
 # Output of `autofuzz` (any project)
 autofuzz-out/
