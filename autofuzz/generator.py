@@ -61,6 +61,10 @@ def _is_string(pt: str) -> bool:
     t_nospace = t.replace(" ", "")
     return "char*" in t_nospace
 
+def _is_writable_string(pt: str) -> bool:
+    """`char *` (the function may write) but not `const char *`."""
+    return "const" not in pt.split("*")[0]
+
 def _is_pointer(pt: str) -> bool:
     return "*" in pt
 
@@ -453,7 +457,14 @@ def _emit_edge_harness_src(func: str, param_types: Sequence[str], edges: Sequenc
                 val = '0' if not _is_string(pt) else '""'
             
             # Declare and assign
-            if _is_string(pt):
+            if _is_string(pt) and _is_writable_string(pt) and val.startswith('"'):
+                # The function may write into its text (strtok, strip CR/LF ...).
+                # A string literal is read-only, so pass a copy of the same size.
+                body.append(f'    static const char a{i}_text[] = {val};')
+                body.append(f'    char a{i}_buf[sizeof a{i}_text];')
+                body.append(f'    memcpy(a{i}_buf, a{i}_text, sizeof a{i}_text);')
+                body.append(f'    {pt} a{i} = a{i}_buf;')
+            elif _is_string(pt):
                 body.append(f'    {pt} a{i} = {val};')
             elif _is_pointer(pt):
                 body.append(f'    {pt} a{i} = {val};')
